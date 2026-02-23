@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ALICE — Don't send data. Send the law.</title>
+<meta name="description" content="Project A.L.I.C.E. — Adaptive Lightweight Infrastructure for Compute Everywhere. 52 Rust crates. Zero compromise.">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:'SF Mono','Fira Code','JetBrains Mono',monospace;color:#fff}
+canvas#sdf{position:fixed;top:0;left:0;width:100%;height:100%;z-index:0}
+canvas#particles{position:fixed;top:0;left:0;width:100%;height:100%;z-index:1;pointer-events:none}
+.overlay{position:fixed;top:0;left:0;width:100%;height:100%;z-index:2;display:flex;flex-direction:column;justify-content:center;align-items:center;pointer-events:none}
+.tagline{font-size:clamp(1.4rem,4vw,3.2rem);font-weight:700;letter-spacing:0.08em;text-align:center;text-shadow:0 0 40px rgba(255,255,255,0.3),0 0 80px rgba(255,255,255,0.1);opacity:0;animation:fadeIn 2s ease-out 0.5s forwards;line-height:1.4;padding:0 1rem}
+.subtitle{font-size:clamp(0.7rem,1.5vw,1rem);letter-spacing:0.25em;text-transform:uppercase;opacity:0;animation:fadeIn 2s ease-out 1.5s forwards;margin-top:2rem;color:rgba(255,255,255,0.5)}
+.badge{position:fixed;bottom:2rem;left:50%;transform:translateX(-50%);z-index:3;font-size:0.65rem;letter-spacing:0.3em;text-transform:uppercase;color:rgba(255,255,255,0.25);pointer-events:none;opacity:0;animation:fadeIn 2s ease-out 2.5s forwards}
+.author{font-size:clamp(0.6rem,1.2vw,0.8rem);letter-spacing:0.2em;opacity:0;animation:fadeIn 2s ease-out 2s forwards;margin-top:1.2rem;color:rgba(255,255,255,0.35)}
+.tech{position:fixed;bottom:4.5rem;left:50%;transform:translateX(-50%);z-index:3;font-size:0.55rem;letter-spacing:0.15em;color:rgba(255,255,255,0.15);pointer-events:none;opacity:0;animation:fadeIn 2s ease-out 3s forwards;white-space:nowrap}
+.github{position:fixed;bottom:6.5rem;left:50%;transform:translateX(-50%);z-index:3;font-size:0.6rem;letter-spacing:0.2em;text-transform:uppercase;opacity:0;animation:fadeIn 2s ease-out 2.8s forwards}
+.github a{color:rgba(255,255,255,0.3);text-decoration:none;pointer-events:auto;transition:color 0.3s}
+.github a:hover{color:rgba(255,255,255,0.7)}
+@keyframes fadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+.overlay .tagline,.overlay .subtitle{transform:translateY(0)}
+</style>
+</head>
+<body>
+
+<canvas id="sdf"></canvas>
+<canvas id="particles"></canvas>
+
+<div class="overlay">
+  <div class="tagline">Don't send data.<br>Send the law.</div>
+  <div class="subtitle">Project A.L.I.C.E.</div>
+  <div class="author">Moroya Sakamoto</div>
+</div>
+
+<div class="github"><a href="https://github.com/ext-sakamoro/ALICE-Eco-System" target="_blank" rel="noopener">github.com/ext-sakamoro/ALICE-Eco-System</a></div>
+<div class="tech">ALICE-SDF Raymarcher &middot; ALICE-Physics Particle Engine &middot; ALICE-View Renderer</div>
+<div class="badge">alicelaw.net &mdash; 52 crates &middot; 456 bridges &middot; zero compromise</div>
+
+<!-- ================================================================== -->
+<!-- ALICE-SDF: Real-time SDF Raymarching (GLSL port of CSG operations) -->
+<!-- ================================================================== -->
+<script>
+(function(){
+const canvas=document.getElementById('sdf');
+const gl=canvas.getContext('webgl',{alpha:false,antialias:false});
+if(!gl)return;
+
+function resize(){
+  const dpr=Math.min(window.devicePixelRatio,2);
+  canvas.width=window.innerWidth*dpr;
+  canvas.height=window.innerHeight*dpr;
+  gl.viewport(0,0,canvas.width,canvas.height);
+}
+resize();
+window.addEventListener('resize',resize);
+
+const vs=`attribute vec2 p;void main(){gl_Position=vec4(p,0,1);}`;
+
+// SDF Fragment Shader — ALICE-SDF operations ported to GLSL
+// Implements: sdSphere, sdBox, sdTorus, opSmoothUnion, opSmoothSubtraction
+// Camera: ALICE-View orbit camera with CORDIC-inspired rotation
+const fs=`
+precision highp float;
+uniform float t;
+uniform vec2 r;
+
+// --- ALICE-SDF Primitives ---
+
+float sdSphere(vec3 p,float s){return length(p)-s;}
+
+float sdBox(vec3 p,vec3 b){
+  vec3 q=abs(p)-b;
+  return length(max(q,0.0))+min(max(q.x,max(q.y,q.z)),0.0);
+}
+
+float sdTorus(vec3 p,vec2 t){
+  vec2 q=vec2(length(p.xz)-t.x,p.y);
+  return length(q)-t.y;
+}
+
+float sdOctahedron(vec3 p,float s){
+  p=abs(p);
+  return (p.x+p.y+p.z-s)*0.57735027;
+}
+
+// --- ALICE-SDF CSG Operations (smooth variants) ---
+
+float opSmoothUnion(float d1,float d2,float k){
+  float h=clamp(0.5+0.5*(d2-d1)/k,0.0,1.0);
+  return mix(d2,d1,h)-k*h*(1.0-h);
+}
+
+float opSmoothSubtraction(float d1,float d2,float k){
+  float h=clamp(0.5-0.5*(d2+d1)/k,0.0,1.0);
+  return mix(d2,-d1,h)+k*h*(1.0-h);
+}
+
+float opSmoothIntersection(float d1,float d2,float k){
+  float h=clamp(0.5-0.5*(d2-d1)/k,0.0,1.0);
+  return mix(d2,d1,h)+k*h*(1.0-h);
+}
+
+// --- ALICE-View: Rotation matrices ---
+
+mat2 rot(float a){float c=cos(a),s=sin(a);return mat2(c,-s,s,c);}
+
+// --- Scene: Morphing ALICE geometry ---
+
+float scene(vec3 p){
+  float time=t*0.4;
+
+  // Orbit rotation (ALICE-View camera concept)
+  p.xz*=rot(time*0.3);
+  p.yz*=rot(time*0.2);
+
+  // Primary shape: morphing between sphere and octahedron
+  float morph=sin(time*0.7)*0.5+0.5;
+  float d1=mix(sdSphere(p,1.2),sdOctahedron(p,1.5),morph);
+
+  // Torus ring orbiting
+  vec3 tp=p;
+  tp.xz*=rot(time*0.8);
+  tp.xy*=rot(time*0.5);
+  float d2=sdTorus(tp,vec2(1.8,0.08));
+
+  // Second torus at different angle
+  vec3 tp2=p;
+  tp2.yz*=rot(time*0.6);
+  tp2.xz*=rot(time*0.3+1.57);
+  float d3=sdTorus(tp2,vec2(1.8,0.08));
+
+  // CSG: smooth union of all elements
+  float d=opSmoothUnion(d1,d2,0.3);
+  d=opSmoothUnion(d,d3,0.3);
+
+  // Carve out breathing hole (smooth subtraction)
+  float breath=sin(time*1.2)*0.3+0.5;
+  float hole=sdSphere(p-vec3(0,0,0),breath);
+  d=opSmoothSubtraction(hole,d,0.2);
+
+  return d;
+}
+
+// --- Raymarching (ALICE-SDF eval loop) ---
+
+vec3 calcNormal(vec3 p){
+  vec2 e=vec2(0.001,0.0);
+  return normalize(vec3(
+    scene(p+e.xyy)-scene(p-e.xyy),
+    scene(p+e.yxy)-scene(p-e.yxy),
+    scene(p+e.yyx)-scene(p-e.yyx)
+  ));
+}
+
+void main(){
+  vec2 uv=(gl_FragCoord.xy-0.5*r)/min(r.x,r.y);
+
+  // Camera (ALICE-View)
+  vec3 ro=vec3(0,0,4.5);
+  vec3 rd=normalize(vec3(uv,-1.5));
+
+  // Raymarch
+  float d=0.0;
+  float totalDist=0.0;
+  for(int i=0;i<80;i++){
+    vec3 p=ro+rd*totalDist;
+    d=scene(p);
+    totalDist+=d;
+    if(d<0.001||totalDist>20.0)break;
+  }
+
+  vec3 col=vec3(0.0);
+
+  if(d<0.001){
+    vec3 p=ro+rd*totalDist;
+    vec3 n=calcNormal(p);
+
+    // Lighting
+    vec3 lightDir=normalize(vec3(1,1,2));
+    float diff=max(dot(n,lightDir),0.0);
+    float spec=pow(max(dot(reflect(-lightDir,n),-rd),0.0),32.0);
+    float fres=pow(1.0-max(dot(n,-rd),0.0),3.0);
+
+    // Monochrome palette — white on black
+    col=vec3(0.04)*diff+vec3(0.6)*spec+vec3(0.15)*fres;
+
+    // Subtle edge glow
+    float edge=1.0-max(dot(n,-rd),0.0);
+    col+=vec3(0.08)*pow(edge,2.0);
+
+    // Distance fog
+    float fog=exp(-totalDist*0.15);
+    col*=fog;
+  }
+
+  // Subtle ambient glow from SDF proximity (volumetric hint)
+  float glow=exp(-totalDist*0.5)*0.03;
+  col+=vec3(glow);
+
+  // Gamma
+  col=pow(col,vec3(0.9));
+
+  gl_FragColor=vec4(col,1);
+}
+`;
+
+function compile(src,type){
+  const s=gl.createShader(type);
+  gl.shaderSource(s,src);
+  gl.compileShader(s);
+  return s;
+}
+
+const prog=gl.createProgram();
+gl.attachShader(prog,compile(vs,gl.VERTEX_SHADER));
+gl.attachShader(prog,compile(fs,gl.FRAGMENT_SHADER));
+gl.linkProgram(prog);
+gl.useProgram(prog);
+
+const buf=gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER,buf);
+gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,1,1]),gl.STATIC_DRAW);
+const pLoc=gl.getAttribLocation(prog,'p');
+gl.enableVertexAttribArray(pLoc);
+gl.vertexAttribPointer(pLoc,2,gl.FLOAT,false,0,0);
+
+const tLoc=gl.getUniformLocation(prog,'t');
+const rLoc=gl.getUniformLocation(prog,'r');
+
+function draw(now){
+  gl.uniform1f(tLoc,now*0.001);
+  gl.uniform2f(rLoc,canvas.width,canvas.height);
+  gl.drawArrays(gl.TRIANGLE_STRIP,0,4);
+  requestAnimationFrame(draw);
+}
+requestAnimationFrame(draw);
+})();
+</script>
+
+<!-- ================================================================== -->
+<!-- ALICE-Physics: Particle simulation with gravity & collision         -->
+<!-- Fixed-point inspired deterministic step, Verlet integration        -->
+<!-- ================================================================== -->
+<script>
+(function(){
+const canvas=document.getElementById('particles');
+const ctx=canvas.getContext('2d');
+
+function resize(){
+  const dpr=Math.min(window.devicePixelRatio,2);
+  canvas.width=window.innerWidth*dpr;
+  canvas.height=window.innerHeight*dpr;
+  canvas.style.width=window.innerWidth+'px';
+  canvas.style.height=window.innerHeight+'px';
+}
+resize();
+window.addEventListener('resize',resize);
+
+// --- ALICE-Physics: Particle system ---
+// Verlet integration (like XPBD position-based dynamics)
+// Deterministic fixed timestep (1/60)
+
+const N=120;
+const DT=1/60;
+const GRAVITY=80;
+const DAMPING=0.998;
+const BOUNCE=0.7;
+
+const particles=[];
+
+function spawn(){
+  const cx=canvas.width/2;
+  const cy=canvas.height/2;
+  const angle=Math.random()*Math.PI*2;
+  const speed=30+Math.random()*120;
+  const r=Math.random()*200;
+  return{
+    x:cx+Math.cos(angle)*r,
+    y:cy+Math.sin(angle)*r,
+    px:0,py:0, // previous position (Verlet)
+    vx:Math.cos(angle+Math.PI/2)*speed*(Math.random()>0.5?1:-1),
+    vy:Math.sin(angle+Math.PI/2)*speed*(Math.random()>0.5?1:-1)-40,
+    life:1,
+    decay:0.001+Math.random()*0.003,
+    size:1+Math.random()*2,
+  };
+}
+
+for(let i=0;i<N;i++){
+  const p=spawn();
+  p.px=p.x;p.py=p.y;
+  particles.push(p);
+}
+
+// --- ALICE-Physics step: Verlet + gravity + boundary collision ---
+
+function step(){
+  const w=canvas.width,h=canvas.height;
+  const cx=w/2,cy=h/2;
+
+  for(let i=0;i<particles.length;i++){
+    const p=particles[i];
+
+    // Verlet integration (position-based, like ALICE-Physics XPBD)
+    const nx=p.x+p.vx*DT;
+    const ny=p.y+p.vy*DT+GRAVITY*DT*DT;
+
+    p.vx=(nx-p.px)/(DT*2)*DAMPING;
+    p.vy=(ny-p.py)/(DT*2)*DAMPING;
+
+    p.px=p.x;
+    p.py=p.y;
+    p.x=nx;
+    p.y=ny;
+
+    // Gentle attraction toward center (orbit)
+    const dx=cx-p.x;
+    const dy=cy-p.y;
+    const dist=Math.sqrt(dx*dx+dy*dy)+1;
+    const force=2000/(dist+200);
+    p.vx+=dx/dist*force*DT;
+    p.vy+=dy/dist*force*DT;
+
+    // Boundary collision (branchless-inspired: clamp + reflect)
+    if(p.x<0){p.x=0;p.vx=Math.abs(p.vx)*BOUNCE;}
+    if(p.x>w){p.x=w;p.vx=-Math.abs(p.vx)*BOUNCE;}
+    if(p.y<0){p.y=0;p.vy=Math.abs(p.vy)*BOUNCE;}
+    if(p.y>h){p.y=h;p.vy=-Math.abs(p.vy)*BOUNCE;}
+
+    // Life decay
+    p.life-=p.decay;
+    if(p.life<=0){
+      const np=spawn();
+      np.px=np.x;np.py=np.y;
+      particles[i]=np;
+    }
+  }
+}
+
+// --- ALICE-View: Render particles ---
+
+function render(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+
+  for(let i=0;i<particles.length;i++){
+    const p=particles[i];
+    const alpha=p.life*0.4;
+    if(alpha<0.01)continue;
+
+    ctx.beginPath();
+    ctx.arc(p.x,p.y,p.size,0,Math.PI*2);
+    ctx.fillStyle=`rgba(255,255,255,${alpha})`;
+    ctx.fill();
+
+    // Motion trail (ALICE-View motion blur concept)
+    if(p.life>0.3){
+      ctx.beginPath();
+      ctx.moveTo(p.x,p.y);
+      ctx.lineTo(p.px,p.py);
+      ctx.strokeStyle=`rgba(255,255,255,${alpha*0.3})`;
+      ctx.lineWidth=p.size*0.5;
+      ctx.stroke();
+    }
+  }
+}
+
+function loop(){
+  step();
+  render();
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+})();
+</script>
+
+</body>
+</html>
