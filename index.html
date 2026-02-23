@@ -623,7 +623,16 @@ function startAudio(){
   // Store for cleanup
   audioCtx._nodes={carrier,modulator,carrier2,mod2,lfo,master,filter};
 
-  // --- ALICE-Synth: Click/Touch percussion (FM hit) ---
+  // --- ALICE-Synth: Click/Touch melodic hit (pentatonic scale) ---
+  // Map X position to pentatonic scale: C D E G A across 3 octaves
+  var PENTA_SEMITONES=[0,2,4,7,9,12,14,16,19,21,24,26,28,31,33,36];
+  function xToFreq(x){
+    var idx=Math.floor(x*PENTA_SEMITONES.length);
+    idx=Math.max(0,Math.min(PENTA_SEMITONES.length-1,idx));
+    // C3 = 130.81 Hz as base, semitone ratio = 2^(1/12)
+    return 130.81*Math.pow(2,PENTA_SEMITONES[idx]/12);
+  }
+
   function synthHit(){
     if(!audioCtx||!isPlaying||audioCtx.state!=='running')return;
     try{
@@ -633,12 +642,12 @@ function startAudio(){
       var hitEnv=audioCtx.createGain();
       var t0=audioCtx.currentTime;
 
-      var freq=200+AlicePointer.x*400;
+      var freq=xToFreq(AlicePointer.x);
       hit.type='sine';
       hit.frequency.value=freq;
       hitMod.type='sine';
       hitMod.frequency.value=freq*2.5;
-      hitModGain.gain.value=freq*3;
+      hitModGain.gain.value=freq*2;
 
       hitMod.connect(hitModGain);
       hitModGain.connect(hit.frequency);
@@ -829,18 +838,41 @@ var AliceMotion=(function(){
 
   // ALICE-Codec: measure page payload
   var raw=document.documentElement.outerHTML.length;
-
-  // Estimate compression ratio (ALICE-Codec uses Zstd-like entropy coding)
-  // For HTML with repeated patterns, typical ratio is 3-5x
-  // We simulate by counting unique bigrams as entropy estimate
   var src=document.documentElement.outerHTML;
   var bigrams=new Set();
   for(var i=0;i<src.length-1;i++)bigrams.add(src.charCodeAt(i)<<8|src.charCodeAt(i+1));
-  var entropy=bigrams.size/65536; // normalized entropy [0,1]
+  var entropy=bigrams.size/65536;
   var ratio=Math.max(0.15,entropy*0.6);
   var compressed=Math.round(raw*ratio);
+  var codecStr='ALICE-Codec: '+raw+' B \u2192 ~'+compressed+' B ('+Math.round(raw/compressed)+'x)';
 
-  el.textContent='ALICE-Codec: '+raw+' B raw \u2192 ~'+compressed+' B compressed ('+Math.round(ratio*100)+'% \u2014 '+Math.round(raw/compressed)+'x)';
+  // FPS counter (exponential moving average)
+  var frames=0;
+  var lastTime=performance.now();
+  var fps=60;
+  var fpsSmooth=60;
+
+  function health(f){
+    if(f>=55)return'\u2588 optimal';  // solid block
+    if(f>=40)return'\u2593 nominal';  // dark shade
+    if(f>=25)return'\u2592 degraded'; // medium shade
+    return'\u2591 critical';          // light shade
+  }
+
+  function updateFps(now){
+    frames++;
+    var dt=now-lastTime;
+    if(dt>=500){
+      fps=frames/(dt*0.001);
+      fpsSmooth+=(fps-fpsSmooth)*0.3; // EMA smoothing
+      frames=0;
+      lastTime=now;
+      var f=Math.round(fpsSmooth);
+      el.textContent=codecStr+' \u2502 '+f+' fps '+health(f);
+    }
+    requestAnimationFrame(updateFps);
+  }
+  requestAnimationFrame(updateFps);
 })();
 </script>
 
