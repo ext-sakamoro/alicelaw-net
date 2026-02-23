@@ -540,10 +540,11 @@ const btn=document.getElementById('soundToggle');
 if(!btn)return;
 
 function startAudio(){
-  if(audioCtx)return;
+  if(audioCtx&&audioCtx.state!=='closed')return;
   audioCtx=new(window.AudioContext||window.webkitAudioContext)();
-  // iOS/Android require resume after user gesture
-  if(audioCtx.state==='suspended')audioCtx.resume();
+  // iOS Safari: must resume synchronously inside user gesture
+  var resumePromise=audioCtx.resume();
+  if(resumePromise)resumePromise.catch(function(){});
 
   // --- ALICE-Synth: 2-operator FM synthesis ---
   // Carrier (operator 0): low drone
@@ -596,9 +597,11 @@ function startAudio(){
   lfoGain.connect(filter.frequency);
 
   // --- Master output with fade-in ---
+  // iOS Safari requires setValueAtTime before any ramp
   const master=audioCtx.createGain();
-  master.gain.value=0;
-  master.gain.linearRampToValueAtTime(0.12,audioCtx.currentTime+3);
+  const now=audioCtx.currentTime;
+  master.gain.setValueAtTime(0.001,now);
+  master.gain.linearRampToValueAtTime(0.12,now+3);
 
   // Signal chain
   carrier.connect(filter);
@@ -620,18 +623,16 @@ function startAudio(){
   // Store for cleanup
   audioCtx._nodes={carrier,modulator,carrier2,mod2,lfo,master,filter};
 
-  // --- ALICE-Synth: Click percussion (FM hit) ---
-  window.addEventListener('click',function aliceSynthHit(){
-    if(!audioCtx||!isPlaying)return;
+  // --- ALICE-Synth: Click/Touch percussion (FM hit) ---
+  function synthHit(){
+    if(!audioCtx||!isPlaying||audioCtx.state!=='running')return;
     try{
-      // Short FM percussion: sine carrier + fast envelope
       var hit=audioCtx.createOscillator();
       var hitMod=audioCtx.createOscillator();
       var hitModGain=audioCtx.createGain();
       var hitEnv=audioCtx.createGain();
-      var now=audioCtx.currentTime;
+      var t0=audioCtx.currentTime;
 
-      // Randomize pitch based on click position for variety
       var freq=200+AlicePointer.x*400;
       hit.type='sine';
       hit.frequency.value=freq;
@@ -639,38 +640,41 @@ function startAudio(){
       hitMod.frequency.value=freq*2.5;
       hitModGain.gain.value=freq*3;
 
-      // FM routing
       hitMod.connect(hitModGain);
       hitModGain.connect(hit.frequency);
 
-      // Sharp ADSR envelope (2ms attack, 80ms decay)
-      hitEnv.gain.setValueAtTime(0,now);
-      hitEnv.gain.linearRampToValueAtTime(0.15,now+0.002);
-      hitEnv.gain.exponentialRampToValueAtTime(0.001,now+0.12);
+      hitEnv.gain.setValueAtTime(0.001,t0);
+      hitEnv.gain.linearRampToValueAtTime(0.15,t0+0.003);
+      hitEnv.gain.exponentialRampToValueAtTime(0.001,t0+0.12);
 
       hit.connect(hitEnv);
       hitEnv.connect(audioCtx.destination);
-      hit.start(now);
-      hitMod.start(now);
-      hit.stop(now+0.15);
-      hitMod.stop(now+0.15);
+      hit.start(t0);
+      hitMod.start(t0);
+      hit.stop(t0+0.15);
+      hitMod.stop(t0+0.15);
     }catch(e){}
-  });
+  }
+  window.addEventListener('click',synthHit);
+  window.addEventListener('touchstart',synthHit,{passive:true});
 }
 
 function stopAudio(){
   if(!audioCtx)return;
-  const nodes=audioCtx._nodes;
+  var nodes=audioCtx._nodes;
   if(nodes){
-    nodes.master.gain.linearRampToValueAtTime(0,audioCtx.currentTime+1);
-    setTimeout(function(){
-      audioCtx.close();
-      audioCtx=null;
-      isPlaying=false;
-      btn.textContent='click for sound';
-      btn.classList.remove('active');
-    },1200);
+    var t=audioCtx.currentTime;
+    nodes.master.gain.setValueAtTime(nodes.master.gain.value,t);
+    nodes.master.gain.linearRampToValueAtTime(0,t+1);
   }
+  var ctx=audioCtx;
+  isPlaying=false;
+  btn.textContent='click for sound';
+  btn.classList.remove('active');
+  setTimeout(function(){
+    try{ctx.close();}catch(e){}
+    if(audioCtx===ctx)audioCtx=null;
+  },1200);
 }
 
 function toggle(e){
