@@ -809,15 +809,15 @@ function render(now){
     for(var i=1;i<joints.length;i++){
       ctx.lineTo(joints[i].x,joints[i].y);
     }
-    ctx.strokeStyle='rgba(255,255,255,0.04)';
-    ctx.lineWidth=2;
+    ctx.strokeStyle='rgba(255,255,255,0.12)';
+    ctx.lineWidth=1.5;
     ctx.stroke();
 
     // Joint dots
     for(var i=0;i<joints.length;i++){
-      var alpha=0.02+0.03*(i/joints.length);
+      var alpha=0.06+0.1*(i/joints.length);
       ctx.beginPath();
-      ctx.arc(joints[i].x,joints[i].y,2,0,Math.PI*2);
+      ctx.arc(joints[i].x,joints[i].y,1.5+1.5*(i/joints.length),0,Math.PI*2);
       ctx.fillStyle='rgba(255,255,255,'+alpha+')';
       ctx.fill();
     }
