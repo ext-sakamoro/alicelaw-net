@@ -542,6 +542,8 @@ if(!btn)return;
 function startAudio(){
   if(audioCtx)return;
   audioCtx=new(window.AudioContext||window.webkitAudioContext)();
+  // iOS/Android require resume after user gesture
+  if(audioCtx.state==='suspended')audioCtx.resume();
 
   // --- ALICE-Synth: 2-operator FM synthesis ---
   // Carrier (operator 0): low drone
@@ -671,10 +673,14 @@ function stopAudio(){
   }
 }
 
-btn.addEventListener('click',function(){
+function toggle(e){
+  e.preventDefault();
+  e.stopPropagation();
   if(isPlaying){stopAudio();}
   else{startAudio();}
-});
+}
+btn.addEventListener('click',toggle);
+btn.addEventListener('touchend',toggle,{passive:false});
 })();
 </script>
 
