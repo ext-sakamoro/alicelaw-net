@@ -11,7 +11,9 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:'SF
 canvas#sdf{position:fixed;top:0;left:0;width:100%;height:100%;z-index:0}
 canvas#particles{position:fixed;top:0;left:0;width:100%;height:100%;z-index:1;pointer-events:none}
 .overlay{position:fixed;top:0;left:0;width:100%;height:100%;z-index:2;display:flex;flex-direction:column;justify-content:center;align-items:center;pointer-events:none}
-.tagline{font-size:clamp(1.4rem,4vw,3.2rem);font-weight:700;letter-spacing:0.08em;text-align:center;text-shadow:0 0 40px rgba(255,255,255,0.3),0 0 80px rgba(255,255,255,0.1);opacity:0;animation:fadeIn 2s ease-out 0.5s forwards;line-height:1.4;padding:0 1rem}
+.tagline{font-size:clamp(1.4rem,4vw,3.2rem);font-weight:700;letter-spacing:0.08em;text-align:center;text-shadow:0 0 40px rgba(255,255,255,0.3),0 0 80px rgba(255,255,255,0.1),0 0 2px rgba(255,255,255,0.8);opacity:0;animation:fadeIn 2s ease-out 0.5s forwards;line-height:1.4;padding:0 1rem}
+.tagline .char{display:inline-block;opacity:0;animation:charDecode 0.6s ease-out forwards}
+.tagline br+.char,.tagline .char:first-child{}
 .subtitle{font-size:clamp(0.7rem,1.5vw,1rem);letter-spacing:0.25em;text-transform:uppercase;opacity:0;animation:fadeIn 2s ease-out 1.5s forwards;margin-top:2rem;color:rgba(255,255,255,0.5)}
 .badge{position:fixed;bottom:2rem;left:50%;transform:translateX(-50%);z-index:3;font-size:0.65rem;letter-spacing:0.3em;text-transform:uppercase;color:rgba(255,255,255,0.25);pointer-events:none;opacity:0;animation:fadeIn 2s ease-out 2.5s forwards}
 .author{font-size:clamp(0.6rem,1.2vw,0.8rem);letter-spacing:0.2em;opacity:0;animation:fadeIn 2s ease-out 2s forwards;margin-top:1.2rem;color:rgba(255,255,255,0.35)}
@@ -20,6 +22,10 @@ canvas#particles{position:fixed;top:0;left:0;width:100%;height:100%;z-index:1;po
 .github a{color:rgba(255,255,255,0.3);text-decoration:none;pointer-events:auto;transition:color 0.3s}
 .github a:hover{color:rgba(255,255,255,0.7)}
 @keyframes fadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+@keyframes charDecode{0%{opacity:0;filter:blur(8px)}40%{opacity:1;filter:blur(2px)}100%{opacity:1;filter:blur(0)}}
+.sound-hint{position:fixed;top:2rem;right:2rem;z-index:4;font-size:0.55rem;letter-spacing:0.2em;text-transform:uppercase;color:rgba(255,255,255,0.2);pointer-events:auto;cursor:pointer;opacity:0;animation:fadeIn 2s ease-out 3.5s forwards;transition:color 0.3s}
+.sound-hint:hover{color:rgba(255,255,255,0.5)}
+.sound-hint.active{color:rgba(255,255,255,0.4)}
 .overlay .tagline,.overlay .subtitle{transform:translateY(0)}
 </style>
 </head>
@@ -35,7 +41,8 @@ canvas#particles{position:fixed;top:0;left:0;width:100%;height:100%;z-index:1;po
 </div>
 
 <div class="github"><a href="https://github.com/ext-sakamoro/ALICE-Eco-System" target="_blank" rel="noopener">github.com/ext-sakamoro/ALICE-Eco-System</a></div>
-<div class="tech">ALICE-SDF Raymarcher &middot; ALICE-Physics Particle Engine &middot; ALICE-View Renderer</div>
+<div class="sound-hint" id="soundToggle">click for sound</div>
+<div class="tech">ALICE-SDF Raymarcher &middot; ALICE-Physics Particle Engine &middot; ALICE-Synth FM Audio &middot; ALICE-Font SDF Glow &middot; ALICE-Text Decoder &middot; ALICE-View Renderer</div>
 <div class="badge">alicelaw.net &mdash; 52 crates &middot; 456 bridges &middot; zero compromise</div>
 
 <!-- ================================================================== -->
@@ -372,6 +379,174 @@ function loop(){
   requestAnimationFrame(loop);
 }
 requestAnimationFrame(loop);
+})();
+</script>
+
+<!-- ================================================================== -->
+<!-- ALICE-Text: Decode animation — characters resolve from noise        -->
+<!-- Exception-based: "Send only surprises, not predictions"            -->
+<!-- ================================================================== -->
+<script>
+(function(){
+const CHARS='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789@#$%&*';
+const tagline=document.querySelector('.tagline');
+if(!tagline)return;
+
+const lines=['Don\'t send data.','Send the law.'];
+tagline.innerHTML='';
+
+let charIndex=0;
+lines.forEach(function(line,li){
+  if(li>0)tagline.appendChild(document.createElement('br'));
+  for(let i=0;i<line.length;i++){
+    const span=document.createElement('span');
+    span.className='char';
+    span.textContent=line[i];
+    span.style.animationDelay=(0.8+charIndex*0.04)+'s';
+    span.dataset.final=line[i];
+    span.dataset.idx=charIndex;
+    tagline.appendChild(span);
+    charIndex++;
+  }
+});
+
+// Scramble phase: randomize characters before they resolve
+const allChars=tagline.querySelectorAll('.char');
+allChars.forEach(function(el){
+  const delay=parseFloat(el.style.animationDelay)*1000;
+  const finalChar=el.dataset.final;
+  if(finalChar===' '){el.innerHTML='&nbsp;';return;}
+
+  let scrambleCount=0;
+  const maxScrambles=6;
+  const startTime=performance.now()+delay-300;
+
+  function scramble(now){
+    if(now<startTime){requestAnimationFrame(scramble);return;}
+    if(scrambleCount<maxScrambles){
+      el.textContent=CHARS[Math.floor(Math.random()*CHARS.length)];
+      scrambleCount++;
+      setTimeout(function(){requestAnimationFrame(scramble);},50);
+    }else{
+      el.textContent=finalChar;
+    }
+  }
+  requestAnimationFrame(scramble);
+});
+})();
+</script>
+
+<!-- ================================================================== -->
+<!-- ALICE-Synth: FM Synthesis drone — Web Audio API                     -->
+<!-- 2-operator FM: carrier + modulator, SVF filter sweep               -->
+<!-- "Don't send waveforms, send the score" — parametric audio          -->
+<!-- ================================================================== -->
+<script>
+(function(){
+let audioCtx=null;
+let isPlaying=false;
+const btn=document.getElementById('soundToggle');
+if(!btn)return;
+
+function startAudio(){
+  if(audioCtx)return;
+  audioCtx=new(window.AudioContext||window.webkitAudioContext)();
+
+  // --- ALICE-Synth: 2-operator FM synthesis ---
+  // Carrier (operator 0): low drone
+  const carrier=audioCtx.createOscillator();
+  carrier.type='sine';
+  carrier.frequency.value=55; // A1
+
+  // Modulator (operator 1): modulates carrier frequency
+  const modulator=audioCtx.createOscillator();
+  modulator.type='sine';
+  modulator.frequency.value=55.5; // slight detune for beating
+
+  const modGain=audioCtx.createGain();
+  modGain.gain.value=30; // FM modulation depth
+
+  // FM connection: modulator → modGain → carrier.frequency
+  modulator.connect(modGain);
+  modGain.connect(carrier.frequency);
+
+  // Second carrier layer (octave shimmer)
+  const carrier2=audioCtx.createOscillator();
+  carrier2.type='sine';
+  carrier2.frequency.value=110; // A2
+
+  const mod2=audioCtx.createOscillator();
+  mod2.type='triangle';
+  mod2.frequency.value=0.3; // slow LFO
+
+  const mod2Gain=audioCtx.createGain();
+  mod2Gain.gain.value=8;
+
+  mod2.connect(mod2Gain);
+  mod2Gain.connect(carrier2.frequency);
+
+  // --- ALICE-Synth: State-Variable Filter (SVF) ---
+  const filter=audioCtx.createBiquadFilter();
+  filter.type='lowpass';
+  filter.frequency.value=200;
+  filter.Q.value=2;
+
+  // Slow filter sweep (breathing effect)
+  const lfo=audioCtx.createOscillator();
+  lfo.type='sine';
+  lfo.frequency.value=0.08; // very slow
+
+  const lfoGain=audioCtx.createGain();
+  lfoGain.gain.value=150;
+
+  lfo.connect(lfoGain);
+  lfoGain.connect(filter.frequency);
+
+  // --- Master output with fade-in ---
+  const master=audioCtx.createGain();
+  master.gain.value=0;
+  master.gain.linearRampToValueAtTime(0.12,audioCtx.currentTime+3);
+
+  // Signal chain
+  carrier.connect(filter);
+  carrier2.connect(filter);
+  filter.connect(master);
+  master.connect(audioCtx.destination);
+
+  // Start all oscillators
+  carrier.start();
+  modulator.start();
+  carrier2.start();
+  mod2.start();
+  lfo.start();
+
+  isPlaying=true;
+  btn.textContent='sound on';
+  btn.classList.add('active');
+
+  // Store for cleanup
+  audioCtx._nodes={carrier,modulator,carrier2,mod2,lfo,master};
+}
+
+function stopAudio(){
+  if(!audioCtx)return;
+  const nodes=audioCtx._nodes;
+  if(nodes){
+    nodes.master.gain.linearRampToValueAtTime(0,audioCtx.currentTime+1);
+    setTimeout(function(){
+      audioCtx.close();
+      audioCtx=null;
+      isPlaying=false;
+      btn.textContent='click for sound';
+      btn.classList.remove('active');
+    },1200);
+  }
+}
+
+btn.addEventListener('click',function(){
+  if(isPlaying){stopAudio();}
+  else{startAudio();}
+});
 })();
 </script>
 
