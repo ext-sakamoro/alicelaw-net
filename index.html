@@ -53,6 +53,54 @@ canvas#ik{position:fixed;top:0;left:0;width:100%;height:100%;z-index:1;pointer-e
 <div class="badge">alicelaw.net &mdash; 52 crates &middot; 456 bridges &middot; zero compromise</div>
 
 <!-- ================================================================== -->
+<!-- ALICE-Interaction: Shared pointer state (mouse + touch)            -->
+<!-- All modules read from this global to react to user input           -->
+<!-- ================================================================== -->
+<script>
+var AlicePointer=(function(){
+  var state={
+    x:0.5,y:0.5,           // normalized [0,1]
+    px:0,py:0,              // pixel coords (DPR-scaled)
+    clicked:false,          // true for one frame after click
+    clickX:0,clickY:0,      // last click position (pixels)
+    active:false            // pointer is over the page
+  };
+  var dpr=Math.min(window.devicePixelRatio,2);
+
+  function onMove(ex,ey){
+    state.x=ex/window.innerWidth;
+    state.y=ey/window.innerHeight;
+    state.px=ex*dpr;
+    state.py=ey*dpr;
+    state.active=true;
+  }
+  function onClick(ex,ey){
+    state.clicked=true;
+    state.clickX=ex*dpr;
+    state.clickY=ey*dpr;
+    // Auto-clear after one frame
+    requestAnimationFrame(function(){state.clicked=false;});
+  }
+
+  window.addEventListener('mousemove',function(e){onMove(e.clientX,e.clientY);});
+  window.addEventListener('touchmove',function(e){
+    if(e.touches.length>0)onMove(e.touches[0].clientX,e.touches[0].clientY);
+  },{passive:true});
+  window.addEventListener('click',function(e){onClick(e.clientX,e.clientY);});
+  window.addEventListener('touchstart',function(e){
+    if(e.touches.length>0){
+      onMove(e.touches[0].clientX,e.touches[0].clientY);
+      onClick(e.touches[0].clientX,e.touches[0].clientY);
+    }
+  },{passive:true});
+  window.addEventListener('mouseleave',function(){state.active=false;});
+  window.addEventListener('resize',function(){dpr=Math.min(window.devicePixelRatio,2);});
+
+  return state;
+})();
+</script>
+
+<!-- ================================================================== -->
 <!-- ALICE-SDF: Real-time SDF Raymarching (GLSL port of CSG operations) -->
 <!-- ================================================================== -->
 <script>
@@ -79,6 +127,8 @@ const fs=`
 precision highp float;
 uniform float t;
 uniform vec2 r;
+uniform vec2 mouse;    // normalized mouse position [0,1]
+uniform float mActive; // 1.0 if pointer active, 0.0 otherwise
 
 // --- ALICE-SDF Primitives ---
 
@@ -153,6 +203,12 @@ float scene(vec3 p){
   float breath=sin(time*1.2)*0.3+0.5;
   float hole=sdSphere(p-vec3(0,0,0),breath);
   d=opSmoothSubtraction(hole,d,0.2);
+
+  // Mouse interaction: attractor field warps geometry
+  vec2 mp=(mouse-0.5)*3.0; // map [0,1] → [-1.5,1.5]
+  vec3 attractor=vec3(mp.x,-mp.y,0.5);
+  float influence=mActive*0.4/(1.0+length(p-attractor)*2.0);
+  d-=influence;
 
   return d;
 }
@@ -242,10 +298,14 @@ gl.vertexAttribPointer(pLoc,2,gl.FLOAT,false,0,0);
 
 const tLoc=gl.getUniformLocation(prog,'t');
 const rLoc=gl.getUniformLocation(prog,'r');
+const mouseLoc=gl.getUniformLocation(prog,'mouse');
+const mActiveLoc=gl.getUniformLocation(prog,'mActive');
 
 function draw(now){
   gl.uniform1f(tLoc,now*0.001);
   gl.uniform2f(rLoc,canvas.width,canvas.height);
+  gl.uniform2f(mouseLoc,AlicePointer.x,AlicePointer.y);
+  gl.uniform1f(mActiveLoc,AlicePointer.active?1.0:0.0);
   gl.drawArrays(gl.TRIANGLE_STRIP,0,4);
   requestAnimationFrame(draw);
 }
@@ -380,7 +440,31 @@ function render(){
   }
 }
 
+// --- ALICE-Physics: Click burst — spawn particles at click position ---
+function burst(cx,cy,count){
+  for(var i=0;i<count;i++){
+    var angle=Math.random()*Math.PI*2;
+    var speed=150+Math.random()*300;
+    var p={
+      x:cx,y:cy,
+      px:cx,py:cy,
+      vx:Math.cos(angle)*speed,
+      vy:Math.sin(angle)*speed,
+      life:0.5+Math.random()*0.5,
+      decay:0.005+Math.random()*0.008,
+      size:1.5+Math.random()*2.5,
+    };
+    particles.push(p);
+  }
+  // Trim to prevent unbounded growth
+  while(particles.length>N+200)particles.shift();
+}
+
 function loop(){
+  // Check for click burst
+  if(AlicePointer.clicked){
+    burst(AlicePointer.clickX,AlicePointer.clickY,25);
+  }
   step();
   render();
   requestAnimationFrame(loop);
@@ -532,7 +616,44 @@ function startAudio(){
   btn.classList.add('active');
 
   // Store for cleanup
-  audioCtx._nodes={carrier,modulator,carrier2,mod2,lfo,master};
+  audioCtx._nodes={carrier,modulator,carrier2,mod2,lfo,master,filter};
+
+  // --- ALICE-Synth: Click percussion (FM hit) ---
+  window.addEventListener('click',function aliceSynthHit(){
+    if(!audioCtx||!isPlaying)return;
+    try{
+      // Short FM percussion: sine carrier + fast envelope
+      var hit=audioCtx.createOscillator();
+      var hitMod=audioCtx.createOscillator();
+      var hitModGain=audioCtx.createGain();
+      var hitEnv=audioCtx.createGain();
+      var now=audioCtx.currentTime;
+
+      // Randomize pitch based on click position for variety
+      var freq=200+AlicePointer.x*400;
+      hit.type='sine';
+      hit.frequency.value=freq;
+      hitMod.type='sine';
+      hitMod.frequency.value=freq*2.5;
+      hitModGain.gain.value=freq*3;
+
+      // FM routing
+      hitMod.connect(hitModGain);
+      hitModGain.connect(hit.frequency);
+
+      // Sharp ADSR envelope (2ms attack, 80ms decay)
+      hitEnv.gain.setValueAtTime(0,now);
+      hitEnv.gain.linearRampToValueAtTime(0.15,now+0.002);
+      hitEnv.gain.exponentialRampToValueAtTime(0.001,now+0.12);
+
+      hit.connect(hitEnv);
+      hitEnv.connect(audioCtx.destination);
+      hit.start(now);
+      hitMod.start(now);
+      hit.stop(now+0.15);
+      hitMod.stop(now+0.15);
+    }catch(e){}
+  });
 }
 
 function stopAudio(){
@@ -793,9 +914,15 @@ function render(now){
   var cx=canvas.width/2;
   var cy=canvas.height/2;
 
-  // Target orbits near center (follows SDF object)
-  var tx=cx+Math.sin(t*0.4)*80;
-  var ty=cy+Math.cos(t*0.3)*60;
+  // Target: follow mouse when active, otherwise orbit center
+  var tx,ty;
+  if(AlicePointer.active){
+    tx=AlicePointer.px;
+    ty=AlicePointer.py;
+  }else{
+    tx=cx+Math.sin(t*0.4)*80;
+    ty=cy+Math.cos(t*0.3)*60;
+  }
 
   for(var c=0;c<chains.length;c++){
     // Each chain targets slightly offset position
