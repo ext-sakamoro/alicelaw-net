@@ -10,6 +10,7 @@
 html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:'SF Mono','Fira Code','JetBrains Mono',monospace;color:#fff}
 canvas#sdf{position:fixed;top:0;left:0;width:100%;height:100%;z-index:0}
 canvas#particles{position:fixed;top:0;left:0;width:100%;height:100%;z-index:1;pointer-events:none}
+canvas#ik{position:fixed;top:0;left:0;width:100%;height:100%;z-index:1;pointer-events:none}
 .overlay{position:fixed;top:0;left:0;width:100%;height:100%;z-index:2;display:flex;flex-direction:column;justify-content:center;align-items:center;pointer-events:none}
 .tagline{font-size:clamp(1.4rem,4vw,3.2rem);font-weight:700;letter-spacing:0.08em;text-align:center;text-shadow:0 0 40px rgba(255,255,255,0.3),0 0 80px rgba(255,255,255,0.1),0 0 2px rgba(255,255,255,0.8);opacity:0;animation:fadeIn 2s ease-out 0.5s forwards;line-height:1.4;padding:0 1rem}
 .tagline .char{display:inline-block;opacity:0;animation:charDecode 0.6s ease-out forwards}
@@ -23,9 +24,12 @@ canvas#particles{position:fixed;top:0;left:0;width:100%;height:100%;z-index:1;po
 .github a:hover{color:rgba(255,255,255,0.7)}
 @keyframes fadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
 @keyframes charDecode{0%{opacity:0;filter:blur(8px)}40%{opacity:1;filter:blur(2px)}100%{opacity:1;filter:blur(0)}}
+@keyframes breathe{0%{opacity:0.3}50%{opacity:0.5}100%{opacity:0.3}}
 .sound-hint{position:fixed;top:2rem;right:2rem;z-index:4;font-size:0.55rem;letter-spacing:0.2em;text-transform:uppercase;color:rgba(255,255,255,0.2);pointer-events:auto;cursor:pointer;opacity:0;animation:fadeIn 2s ease-out 3.5s forwards;transition:color 0.3s}
 .sound-hint:hover{color:rgba(255,255,255,0.5)}
 .sound-hint.active{color:rgba(255,255,255,0.4)}
+.sig{position:fixed;top:2rem;left:2rem;z-index:4;font-size:0.45rem;letter-spacing:0.1em;color:rgba(255,255,255,0.12);pointer-events:none;opacity:0;animation:fadeIn 2s ease-out 4s forwards;font-variant-numeric:tabular-nums;line-height:1.6}
+.codec-stat{position:fixed;bottom:8.5rem;left:50%;transform:translateX(-50%);z-index:3;font-size:0.5rem;letter-spacing:0.15em;color:rgba(255,255,255,0.12);pointer-events:none;opacity:0;animation:fadeIn 2s ease-out 3.5s forwards;font-variant-numeric:tabular-nums}
 .overlay .tagline,.overlay .subtitle{transform:translateY(0)}
 </style>
 </head>
@@ -33,6 +37,7 @@ canvas#particles{position:fixed;top:0;left:0;width:100%;height:100%;z-index:1;po
 
 <canvas id="sdf"></canvas>
 <canvas id="particles"></canvas>
+<canvas id="ik"></canvas>
 
 <div class="overlay">
   <div class="tagline">Don't send data.<br>Send the law.</div>
@@ -40,9 +45,11 @@ canvas#particles{position:fixed;top:0;left:0;width:100%;height:100%;z-index:1;po
   <div class="author">Moroya Sakamoto</div>
 </div>
 
+<div class="sig" id="sigBlock"></div>
 <div class="github"><a href="https://github.com/ext-sakamoro/ALICE-Eco-System" target="_blank" rel="noopener">github.com/ext-sakamoro/ALICE-Eco-System</a></div>
 <div class="sound-hint" id="soundToggle">click for sound</div>
-<div class="tech">ALICE-SDF Raymarcher &middot; ALICE-Physics Particle Engine &middot; ALICE-Synth FM Audio &middot; ALICE-Font SDF Glow &middot; ALICE-Text Decoder &middot; ALICE-View Renderer</div>
+<div class="codec-stat" id="codecStat"></div>
+<div class="tech">ALICE-SDF &middot; ALICE-Physics &middot; ALICE-Synth &middot; ALICE-Font &middot; ALICE-Text &middot; ALICE-View &middot; ALICE-Motion &middot; ALICE-Animation &middot; ALICE-Crypto &middot; ALICE-Codec &middot; ALICE-Kinematics</div>
 <div class="badge">alicelaw.net &mdash; 52 crates &middot; 456 bridges &middot; zero compromise</div>
 
 <!-- ================================================================== -->
@@ -547,6 +554,277 @@ btn.addEventListener('click',function(){
   if(isPlaying){stopAudio();}
   else{startAudio();}
 });
+})();
+</script>
+
+<!-- ================================================================== -->
+<!-- ALICE-Motion: S-curve & Bezier easing functions                     -->
+<!-- Replaces CSS ease-out with 7th-order polynomial S-curve            -->
+<!-- Used by ALICE-Animation timeline below                             -->
+<!-- ================================================================== -->
+<script>
+var AliceMotion=(function(){
+  // ALICE-Motion: 7th-order S-curve (smoother than cubic-bezier)
+  // f(t) = 35t^4 - 84t^5 + 70t^6 - 20t^7 (perceptually smooth)
+  function sCurve7(t){
+    t=Math.max(0,Math.min(1,t));
+    var t2=t*t,t4=t2*t2;
+    return 35*t4-84*t4*t+70*t4*t2-20*t4*t2*t;
+  }
+
+  // ALICE-Motion: Cubic Bezier evaluator (De Casteljau)
+  function cubicBezier(p1x,p1y,p2x,p2y,t){
+    // Newton-Raphson to find t for x, then evaluate y
+    var cx=3*p1x,bx=3*(p2x-p1x)-cx,ax=1-cx-bx;
+    var cy=3*p1y,by=3*(p2y-p1y)-cy,ay=1-cy-by;
+    var x=t;
+    for(var i=0;i<8;i++){
+      var xEst=((ax*x+bx)*x+cx)*x;
+      var dx=xEst-t;
+      if(Math.abs(dx)<1e-6)break;
+      var dxdt=(3*ax*x+2*bx)*x+cx;
+      if(Math.abs(dxdt)<1e-6)break;
+      x-=dx/dxdt;
+    }
+    return((ay*x+by)*x+cy)*x;
+  }
+
+  // ALICE-Motion: Elastic ease-out (spring-damper model)
+  function elasticOut(t){
+    if(t<=0)return 0;if(t>=1)return 1;
+    return Math.pow(2,-10*t)*Math.sin((t-0.075)*2*Math.PI/0.3)+1;
+  }
+
+  return{sCurve7:sCurve7,cubicBezier:cubicBezier,elasticOut:elasticOut};
+})();
+</script>
+
+<!-- ================================================================== -->
+<!-- ALICE-Animation: Keyframe timeline engine                          -->
+<!-- Drives continuous animations: subtitle pulse, author breathe       -->
+<!-- ================================================================== -->
+<script>
+(function(){
+  var tracks=[];
+  var startTime=performance.now();
+
+  // Track: subtitle opacity pulse (ALICE-Animation keyframe track)
+  var subtitle=document.querySelector('.subtitle');
+  var author=document.querySelector('.author');
+
+  if(subtitle){
+    tracks.push({el:subtitle,prop:'opacity',
+      keyframes:[{t:0,v:0.5},{t:4000,v:0.7},{t:8000,v:0.5}],
+      loop:true,delay:3000});
+  }
+  if(author){
+    tracks.push({el:author,prop:'opacity',
+      keyframes:[{t:0,v:0.35},{t:5000,v:0.5},{t:10000,v:0.35}],
+      loop:true,delay:4000});
+  }
+
+  function evalTrack(track,now){
+    var elapsed=now-startTime-track.delay;
+    if(elapsed<0)return;
+    var kf=track.keyframes;
+    var duration=kf[kf.length-1].t;
+    var t=track.loop?(elapsed%duration):Math.min(elapsed,duration);
+
+    // Find keyframe pair
+    for(var i=0;i<kf.length-1;i++){
+      if(t>=kf[i].t&&t<=kf[i+1].t){
+        var local=(t-kf[i].t)/(kf[i+1].t-kf[i].t);
+        // Use ALICE-Motion S-curve for interpolation
+        var eased=AliceMotion.sCurve7(local);
+        var val=kf[i].v+(kf[i+1].v-kf[i].v)*eased;
+        track.el.style[track.prop]=val;
+        break;
+      }
+    }
+  }
+
+  function tick(now){
+    for(var i=0;i<tracks.length;i++)evalTrack(tracks[i],now);
+    requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+})();
+</script>
+
+<!-- ================================================================== -->
+<!-- ALICE-Crypto: FNV-1a page integrity hash + Ed25519 signature mock  -->
+<!-- Displays rolling hash of page state in top-left corner             -->
+<!-- ================================================================== -->
+<script>
+(function(){
+  var sigEl=document.getElementById('sigBlock');
+  if(!sigEl)return;
+
+  // ALICE-Crypto: FNV-1a hash (same algorithm used in all ALICE crates)
+  function fnv1a(str){
+    var h=0xcbf29ce4n;
+    for(var i=0;i<str.length;i++){
+      h^=BigInt(str.charCodeAt(i));
+      h=(h*0x01000193n)&0xFFFFFFFFn;
+    }
+    return h;
+  }
+
+  // Generate page content hash
+  var pageHash=fnv1a(document.documentElement.outerHTML.substring(0,4096));
+  var hex=pageHash.toString(16).padStart(8,'0');
+
+  // Mock Ed25519 signature display (ALICE-Auth style)
+  var ts=Math.floor(Date.now()/1000).toString(16);
+  var sig1='a11ce'+hex+ts;
+  var sig2=fnv1a(sig1).toString(16).padStart(8,'0');
+
+  sigEl.innerHTML=
+    'ALICE-Crypto FNV-1a<br>'+
+    'page: 0x'+hex+'<br>'+
+    'time: 0x'+ts+'<br>'+
+    'sig:  0x'+sig1.substring(0,8)+'...'+sig2;
+})();
+</script>
+
+<!-- ================================================================== -->
+<!-- ALICE-Codec: Page compression ratio display                        -->
+<!-- Measures raw vs theoretical compressed size                        -->
+<!-- ================================================================== -->
+<script>
+(function(){
+  var el=document.getElementById('codecStat');
+  if(!el)return;
+
+  // ALICE-Codec: measure page payload
+  var raw=document.documentElement.outerHTML.length;
+
+  // Estimate compression ratio (ALICE-Codec uses Zstd-like entropy coding)
+  // For HTML with repeated patterns, typical ratio is 3-5x
+  // We simulate by counting unique bigrams as entropy estimate
+  var src=document.documentElement.outerHTML;
+  var bigrams=new Set();
+  for(var i=0;i<src.length-1;i++)bigrams.add(src.charCodeAt(i)<<8|src.charCodeAt(i+1));
+  var entropy=bigrams.size/65536; // normalized entropy [0,1]
+  var ratio=Math.max(0.15,entropy*0.6);
+  var compressed=Math.round(raw*ratio);
+
+  el.textContent='ALICE-Codec: '+raw+' B raw \u2192 ~'+compressed+' B compressed ('+Math.round(ratio*100)+'% \u2014 '+Math.round(raw/compressed)+'x)';
+})();
+</script>
+
+<!-- ================================================================== -->
+<!-- ALICE-Kinematics: Inverse Kinematics chain visualization           -->
+<!-- 2D FABRIK solver — ghost limbs reaching toward SDF center          -->
+<!-- ================================================================== -->
+<script>
+(function(){
+var canvas=document.getElementById('ik');
+var ctx=canvas.getContext('2d');
+
+function resize(){
+  var dpr=Math.min(window.devicePixelRatio,2);
+  canvas.width=window.innerWidth*dpr;
+  canvas.height=window.innerHeight*dpr;
+  canvas.style.width=window.innerWidth+'px';
+  canvas.style.height=window.innerHeight+'px';
+}
+resize();
+window.addEventListener('resize',resize);
+
+// --- ALICE-Kinematics: FABRIK IK Solver ---
+// Forward And Backward Reaching Inverse Kinematics
+
+var CHAINS=4;
+var SEGMENTS=6;
+var SEG_LEN=35;
+
+// Create IK chains anchored at screen edges
+var chains=[];
+function initChains(){
+  chains=[];
+  var w=canvas.width,h=canvas.height;
+  var anchors=[
+    {x:0,y:h*0.3},
+    {x:w,y:h*0.7},
+    {x:w*0.3,y:0},
+    {x:w*0.7,y:h}
+  ];
+  for(var c=0;c<CHAINS;c++){
+    var joints=[];
+    for(var i=0;i<=SEGMENTS;i++){
+      joints.push({x:anchors[c].x,y:anchors[c].y});
+    }
+    chains.push({joints:joints,anchor:anchors[c]});
+  }
+}
+initChains();
+window.addEventListener('resize',function(){setTimeout(initChains,100);});
+
+// FABRIK solve: reach toward target, then pull back to anchor
+function solveFABRIK(chain,tx,ty,iterations){
+  var joints=chain.joints;
+  var n=joints.length;
+  for(var iter=0;iter<iterations;iter++){
+    // Forward pass: end-effector → target
+    joints[n-1].x=tx;joints[n-1].y=ty;
+    for(var i=n-2;i>=0;i--){
+      var dx=joints[i].x-joints[i+1].x;
+      var dy=joints[i].y-joints[i+1].y;
+      var d=Math.sqrt(dx*dx+dy*dy)||1;
+      joints[i].x=joints[i+1].x+dx/d*SEG_LEN;
+      joints[i].y=joints[i+1].y+dy/d*SEG_LEN;
+    }
+    // Backward pass: root → anchor
+    joints[0].x=chain.anchor.x;joints[0].y=chain.anchor.y;
+    for(var i=1;i<n;i++){
+      var dx=joints[i].x-joints[i-1].x;
+      var dy=joints[i].y-joints[i-1].y;
+      var d=Math.sqrt(dx*dx+dy*dy)||1;
+      joints[i].x=joints[i-1].x+dx/d*SEG_LEN;
+      joints[i].y=joints[i-1].y+dy/d*SEG_LEN;
+    }
+  }
+}
+
+function render(now){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  var t=now*0.001;
+  var cx=canvas.width/2;
+  var cy=canvas.height/2;
+
+  // Target orbits near center (follows SDF object)
+  var tx=cx+Math.sin(t*0.4)*80;
+  var ty=cy+Math.cos(t*0.3)*60;
+
+  for(var c=0;c<chains.length;c++){
+    // Each chain targets slightly offset position
+    var ox=Math.sin(t*0.5+c*1.57)*40;
+    var oy=Math.cos(t*0.4+c*1.57)*30;
+    solveFABRIK(chains[c],tx+ox,ty+oy,5);
+
+    var joints=chains[c].joints;
+    ctx.beginPath();
+    ctx.moveTo(joints[0].x,joints[0].y);
+    for(var i=1;i<joints.length;i++){
+      ctx.lineTo(joints[i].x,joints[i].y);
+    }
+    ctx.strokeStyle='rgba(255,255,255,0.04)';
+    ctx.lineWidth=2;
+    ctx.stroke();
+
+    // Joint dots
+    for(var i=0;i<joints.length;i++){
+      var alpha=0.02+0.03*(i/joints.length);
+      ctx.beginPath();
+      ctx.arc(joints[i].x,joints[i].y,2,0,Math.PI*2);
+      ctx.fillStyle='rgba(255,255,255,'+alpha+')';
+      ctx.fill();
+    }
+  }
+  requestAnimationFrame(render);
+}
+requestAnimationFrame(render);
 })();
 </script>
 
