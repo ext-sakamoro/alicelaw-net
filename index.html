@@ -86,8 +86,8 @@ var AliceEntropy=(function(){
     switch(state.phase){
       case'calm':
         state.level+=RISE_RATE*(0.3+Math.random()*0.7)*0.016;
-        state.level+=state.clickAccum;
-        state.clickAccum*=0.9;
+        state.level+=state.clickAccum*0.1;
+        state.clickAccum*=0.85;
         state.intensity*=0.95;
         if(state.level>=THRESHOLD){
           state.phase='destruction';
