@@ -11,9 +11,11 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:'SF
 canvas#sdf{position:fixed;top:0;left:0;width:100%;height:100%;z-index:0}
 canvas#particles{position:fixed;top:0;left:0;width:100%;height:100%;z-index:1;pointer-events:none}
 canvas#ik{position:fixed;top:0;left:0;width:100%;height:100%;z-index:1;pointer-events:none}
+canvas#glitch{position:fixed;top:0;left:0;width:100%;height:100%;z-index:5;pointer-events:none;mix-blend-mode:screen}
 .overlay{position:fixed;top:0;left:0;width:100%;height:100%;z-index:2;display:flex;flex-direction:column;justify-content:center;align-items:center;pointer-events:none}
 .tagline{font-size:clamp(1.4rem,4vw,3.2rem);font-weight:700;letter-spacing:0.08em;text-align:center;text-shadow:0 0 40px rgba(255,255,255,0.3),0 0 80px rgba(255,255,255,0.1),0 0 2px rgba(255,255,255,0.8);opacity:0;animation:fadeIn 2s ease-out 0.5s forwards;line-height:1.4;padding:0 1rem}
-.tagline .char{display:inline-block;opacity:0;animation:charDecode 0.6s ease-out forwards}
+.tagline .char{display:inline-block;opacity:0;animation:charDecode 0.6s ease-out forwards;transition:color 0.1s,text-shadow 0.1s}
+.tagline .char.corrupted{color:#ff1744;text-shadow:0 0 10px rgba(255,23,68,0.8),2px 0 0 rgba(0,255,255,0.5),-2px 0 0 rgba(255,0,128,0.5)}
 .tagline br+.char,.tagline .char:first-child{}
 .subtitle{font-size:clamp(0.7rem,1.5vw,1rem);letter-spacing:0.25em;text-transform:uppercase;opacity:0;animation:fadeIn 2s ease-out 1.5s forwards;margin-top:2rem;color:rgba(255,255,255,0.5)}
 .badge{position:fixed;bottom:2rem;left:50%;transform:translateX(-50%);z-index:3;font-size:0.65rem;letter-spacing:0.3em;text-transform:uppercase;color:rgba(255,255,255,0.25);pointer-events:none;opacity:0;animation:fadeIn 2s ease-out 2.5s forwards}
@@ -25,11 +27,13 @@ canvas#ik{position:fixed;top:0;left:0;width:100%;height:100%;z-index:1;pointer-e
 @keyframes fadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
 @keyframes charDecode{0%{opacity:0;filter:blur(8px)}40%{opacity:1;filter:blur(2px)}100%{opacity:1;filter:blur(0)}}
 @keyframes breathe{0%{opacity:0.3}50%{opacity:0.5}100%{opacity:0.3}}
-.sound-hint{position:fixed;top:2rem;right:2rem;z-index:4;font-size:0.55rem;letter-spacing:0.2em;text-transform:uppercase;color:rgba(255,255,255,0.2);pointer-events:auto;cursor:pointer;opacity:0;animation:fadeIn 2s ease-out 3.5s forwards;transition:color 0.3s}
+.sound-hint{position:fixed;top:2rem;right:2rem;z-index:6;font-size:0.55rem;letter-spacing:0.2em;text-transform:uppercase;color:rgba(255,255,255,0.2);pointer-events:auto;cursor:pointer;opacity:0;animation:fadeIn 2s ease-out 3.5s forwards;transition:color 0.3s}
 .sound-hint:hover{color:rgba(255,255,255,0.5)}
 .sound-hint.active{color:rgba(255,255,255,0.4)}
-.sig{position:fixed;top:2rem;left:2rem;z-index:4;font-size:0.45rem;letter-spacing:0.1em;color:rgba(255,255,255,0.12);pointer-events:none;opacity:0;animation:fadeIn 2s ease-out 4s forwards;font-variant-numeric:tabular-nums;line-height:1.6}
+.sig{position:fixed;top:2rem;left:2rem;z-index:6;font-size:0.45rem;letter-spacing:0.1em;color:rgba(255,255,255,0.12);pointer-events:none;opacity:0;animation:fadeIn 2s ease-out 4s forwards;font-variant-numeric:tabular-nums;line-height:1.6}
 .codec-stat{position:fixed;bottom:8.5rem;left:50%;transform:translateX(-50%);z-index:3;font-size:0.5rem;letter-spacing:0.15em;color:rgba(255,255,255,0.12);pointer-events:none;opacity:0;animation:fadeIn 2s ease-out 3.5s forwards;font-variant-numeric:tabular-nums}
+.entropy-bar{position:fixed;top:0;left:0;width:100%;height:2px;z-index:10;pointer-events:none;opacity:0;animation:fadeIn 2s ease-out 4s forwards}
+.entropy-fill{height:100%;width:0%;background:linear-gradient(90deg,rgba(255,255,255,0.1),rgba(255,23,68,0.6),rgba(0,255,255,0.4));transition:width 0.3s}
 .overlay .tagline,.overlay .subtitle{transform:translateY(0)}
 </style>
 </head>
@@ -38,6 +42,7 @@ canvas#ik{position:fixed;top:0;left:0;width:100%;height:100%;z-index:1;pointer-e
 <canvas id="sdf"></canvas>
 <canvas id="particles"></canvas>
 <canvas id="ik"></canvas>
+<canvas id="glitch"></canvas>
 
 <div class="overlay">
   <div class="tagline">Don't send data.<br>Send the law.</div>
@@ -45,12 +50,86 @@ canvas#ik{position:fixed;top:0;left:0;width:100%;height:100%;z-index:1;pointer-e
   <div class="author">Moroya Sakamoto</div>
 </div>
 
+<div class="entropy-bar"><div class="entropy-fill" id="entropyFill"></div></div>
 <div class="sig" id="sigBlock"></div>
 <div class="github"><a href="https://github.com/ext-sakamoro/ALICE-Eco-System" target="_blank" rel="noopener">github.com/ext-sakamoro/ALICE-Eco-System</a></div>
 <div class="sound-hint" id="soundToggle">click for sound</div>
 <div class="codec-stat" id="codecStat"></div>
-<div class="tech">ALICE-SDF &middot; ALICE-Physics &middot; ALICE-Synth &middot; ALICE-Font &middot; ALICE-Text &middot; ALICE-View &middot; ALICE-Motion &middot; ALICE-Animation &middot; ALICE-Crypto &middot; ALICE-Codec &middot; ALICE-Kinematics</div>
+<div class="tech">ALICE-SDF &middot; ALICE-Physics &middot; ALICE-Synth &middot; ALICE-Text &middot; ALICE-View &middot; ALICE-Motion &middot; ALICE-Animation &middot; ALICE-Crypto &middot; ALICE-Codec &middot; ALICE-Kinematics &middot; ALICE-Entropy</div>
 <div class="badge">alicelaw.net &mdash; 52 crates &middot; 456 bridges &middot; zero compromise</div>
+
+<!-- ================================================================== -->
+<!-- ALICE-Entropy: Master clock for destruction & rebirth cycles        -->
+<!-- All modules read from this to synchronize chaos                    -->
+<!-- ================================================================== -->
+<script>
+var AliceEntropy=(function(){
+  var state={
+    level:0,           // 0..1 entropy accumulation
+    phase:'calm',      // calm | rising | destruction | rebirth
+    destructionTime:0, // timestamp of last destruction event
+    intensity:0,       // current destruction intensity 0..1
+    clickAccum:0,      // click energy accumulator
+    cycleCount:0       // total destruction cycles
+  };
+
+  var RISE_RATE=0.008;
+  var DECAY_RATE=0.015;
+  var CLICK_BOOST=0.12;
+  var THRESHOLD=0.85;
+  var DESTRUCTION_DURATION=2200;
+  var REBIRTH_DURATION=1800;
+
+  var fillEl=document.getElementById('entropyFill');
+
+  function update(now){
+    switch(state.phase){
+      case'calm':
+        state.level+=RISE_RATE*(0.3+Math.random()*0.7)*0.016;
+        state.level+=state.clickAccum;
+        state.clickAccum*=0.9;
+        state.intensity*=0.95;
+        if(state.level>=THRESHOLD){
+          state.phase='destruction';
+          state.destructionTime=now;
+          state.cycleCount++;
+        }
+        break;
+      case'destruction':
+        var elapsed=now-state.destructionTime;
+        state.intensity=1.0-elapsed/DESTRUCTION_DURATION*0.3;
+        state.intensity=Math.max(0.7,Math.min(1,state.intensity));
+        if(elapsed>DESTRUCTION_DURATION){
+          state.phase='rebirth';
+          state.destructionTime=now;
+        }
+        break;
+      case'rebirth':
+        var elapsed=now-state.destructionTime;
+        var t=elapsed/REBIRTH_DURATION;
+        state.intensity=(1-t)*0.7;
+        state.level=(1-t)*THRESHOLD;
+        if(t>=1){
+          state.phase='calm';
+          state.intensity=0;
+          state.level=0;
+        }
+        break;
+    }
+    state.level=Math.max(0,Math.min(1,state.level));
+    if(fillEl)fillEl.style.width=(state.level*100)+'%';
+    requestAnimationFrame(update);
+  }
+  requestAnimationFrame(update);
+
+  return{
+    state:state,
+    addClick:function(){state.clickAccum+=CLICK_BOOST;},
+    isDestroying:function(){return state.phase==='destruction'||state.phase==='rebirth';},
+    destructionProgress:function(){return state.intensity;}
+  };
+})();
+</script>
 
 <!-- ================================================================== -->
 <!-- ALICE-Interaction: Shared pointer state (mouse + touch)            -->
@@ -59,11 +138,11 @@ canvas#ik{position:fixed;top:0;left:0;width:100%;height:100%;z-index:1;pointer-e
 <script>
 var AlicePointer=(function(){
   var state={
-    x:0.5,y:0.5,           // normalized [0,1]
-    px:0,py:0,              // pixel coords (DPR-scaled)
-    clicked:false,          // true for one frame after click
-    clickX:0,clickY:0,      // last click position (pixels)
-    active:false            // pointer is over the page
+    x:0.5,y:0.5,
+    px:0,py:0,
+    clicked:false,
+    clickX:0,clickY:0,
+    active:false
   };
   var dpr=Math.min(window.devicePixelRatio,2);
 
@@ -78,7 +157,7 @@ var AlicePointer=(function(){
     state.clicked=true;
     state.clickX=ex*dpr;
     state.clickY=ey*dpr;
-    // Auto-clear after one frame
+    AliceEntropy.addClick();
     requestAnimationFrame(function(){state.clicked=false;});
   }
 
@@ -101,7 +180,8 @@ var AlicePointer=(function(){
 </script>
 
 <!-- ================================================================== -->
-<!-- ALICE-SDF: Real-time SDF Raymarching (GLSL port of CSG operations) -->
+<!-- ALICE-SDF: Raymarching with destruction — fracture, chromatic      -->
+<!-- aberration, scan lines, shockwave on click                        -->
 <!-- ================================================================== -->
 <script>
 (function(){
@@ -120,17 +200,16 @@ window.addEventListener('resize',resize);
 
 const vs=`attribute vec2 p;void main(){gl_Position=vec4(p,0,1);}`;
 
-// SDF Fragment Shader — ALICE-SDF operations ported to GLSL
-// Implements: sdSphere, sdBox, sdTorus, opSmoothUnion, opSmoothSubtraction
-// Camera: ALICE-View orbit camera with CORDIC-inspired rotation
 const fs=`
 precision highp float;
 uniform float t;
 uniform vec2 r;
-uniform vec2 mouse;    // normalized mouse position [0,1]
-uniform float mActive; // 1.0 if pointer active, 0.0 otherwise
-
-// --- ALICE-SDF Primitives ---
+uniform vec2 mouse;
+uniform float mActive;
+uniform float entropy;
+uniform float destruction;
+uniform float shockwave;
+uniform vec2 shockCenter;
 
 float sdSphere(vec3 p,float s){return length(p)-s;}
 
@@ -149,8 +228,6 @@ float sdOctahedron(vec3 p,float s){
   return (p.x+p.y+p.z-s)*0.57735027;
 }
 
-// --- ALICE-SDF CSG Operations (smooth variants) ---
-
 float opSmoothUnion(float d1,float d2,float k){
   float h=clamp(0.5+0.5*(d2-d1)/k,0.0,1.0);
   return mix(d2,d1,h)-k*h*(1.0-h);
@@ -161,59 +238,84 @@ float opSmoothSubtraction(float d1,float d2,float k){
   return mix(d2,-d1,h)+k*h*(1.0-h);
 }
 
-float opSmoothIntersection(float d1,float d2,float k){
-  float h=clamp(0.5-0.5*(d2-d1)/k,0.0,1.0);
-  return mix(d2,d1,h)+k*h*(1.0-h);
-}
-
-// --- ALICE-View: Rotation matrices ---
-
 mat2 rot(float a){float c=cos(a),s=sin(a);return mat2(c,-s,s,c);}
 
-// --- Scene: Morphing ALICE geometry ---
+// Pseudo-random hash for fracture displacement
+float hash(vec3 p){
+  p=fract(p*vec3(443.897,441.423,437.195));
+  p+=dot(p,p.yzx+19.19);
+  return fract((p.x+p.y)*p.z);
+}
+
+// Voronoi-like fracture displacement
+vec3 fractureDisplace(vec3 p,float strength){
+  vec3 cellId=floor(p*2.0);
+  float h=hash(cellId);
+  vec3 dir=normalize(vec3(hash(cellId+1.0)-0.5,hash(cellId+2.0)-0.5,hash(cellId+3.0)-0.5));
+  float phase=h*6.283+t*3.0;
+  return dir*sin(phase)*strength*h;
+}
 
 float scene(vec3 p){
   float time=t*0.4;
 
-  // Orbit rotation (ALICE-View camera concept)
+  // Destruction: fracture displacement
+  float fractureStr=destruction*1.5;
+  if(fractureStr>0.01){
+    p+=fractureDisplace(p,fractureStr);
+  }
+
   p.xz*=rot(time*0.3);
   p.yz*=rot(time*0.2);
 
-  // Primary shape: morphing between sphere and octahedron
+  // Entropy agitation: geometry vibrates as entropy rises
+  float agitation=entropy*0.15;
+  p+=vec3(sin(t*7.0+p.y*3.0),cos(t*5.3+p.z*2.7),sin(t*6.1+p.x*3.3))*agitation;
+
   float morph=sin(time*0.7)*0.5+0.5;
   float d1=mix(sdSphere(p,1.2),sdOctahedron(p,1.5),morph);
 
-  // Torus ring orbiting
   vec3 tp=p;
   tp.xz*=rot(time*0.8);
   tp.xy*=rot(time*0.5);
   float d2=sdTorus(tp,vec2(1.8,0.08));
 
-  // Second torus at different angle
   vec3 tp2=p;
   tp2.yz*=rot(time*0.6);
   tp2.xz*=rot(time*0.3+1.57);
   float d3=sdTorus(tp2,vec2(1.8,0.08));
 
-  // CSG: smooth union of all elements
+  // Third torus visible during high entropy
+  vec3 tp3=p;
+  tp3.xy*=rot(time*1.1);
+  tp3.yz*=rot(time*0.7+2.09);
+  float d4=sdTorus(tp3,vec2(1.4+entropy*0.6,0.05+entropy*0.04));
+
   float d=opSmoothUnion(d1,d2,0.3);
   d=opSmoothUnion(d,d3,0.3);
+  d=opSmoothUnion(d,d4,0.3+entropy*0.2);
 
-  // Carve out breathing hole (smooth subtraction)
-  float breath=sin(time*1.2)*0.3+0.5;
-  float hole=sdSphere(p-vec3(0,0,0),breath);
-  d=opSmoothSubtraction(hole,d,0.2);
+  // Breathing hole grows during destruction
+  float breath=sin(time*1.2)*0.3+0.5+destruction*0.8;
+  float hole=sdSphere(p,breath);
+  d=opSmoothSubtraction(hole,d,0.2+destruction*0.3);
 
-  // Mouse interaction: attractor field warps geometry
-  vec2 mp=(mouse-0.5)*3.0; // map [0,1] → [-1.5,1.5]
+  // Additional destruction holes — geometry tears apart
+  if(destruction>0.1){
+    float h2=sdSphere(p-vec3(sin(t*2.0)*0.8,cos(t*1.7)*0.6,0),destruction*0.6);
+    d=opSmoothSubtraction(h2,d,0.15);
+    float h3=sdSphere(p-vec3(0,sin(t*2.3)*0.7,cos(t*1.9)*0.8),destruction*0.5);
+    d=opSmoothSubtraction(h3,d,0.15);
+  }
+
+  // Mouse attractor (stronger during high entropy)
+  vec2 mp=(mouse-0.5)*3.0;
   vec3 attractor=vec3(mp.x,-mp.y,0.5);
-  float influence=mActive*0.4/(1.0+length(p-attractor)*2.0);
+  float influence=mActive*(0.4+entropy*0.6)/(1.0+length(p-attractor)*2.0);
   d-=influence;
 
   return d;
 }
-
-// --- Raymarching (ALICE-SDF eval loop) ---
 
 vec3 calcNormal(vec3 p){
   vec2 e=vec2(0.001,0.0);
@@ -227,11 +329,28 @@ vec3 calcNormal(vec3 p){
 void main(){
   vec2 uv=(gl_FragCoord.xy-0.5*r)/min(r.x,r.y);
 
-  // Camera (ALICE-View)
+  // Shockwave distortion from clicks
+  if(shockwave>0.01){
+    vec2 suv=(gl_FragCoord.xy/r-shockCenter)*vec2(r.x/r.y,1.0);
+    float sd=length(suv);
+    float ring=(1.0-shockwave)*1.5;
+    float band=smoothstep(ring-0.15,ring,sd)*smoothstep(ring+0.15,ring,sd);
+    uv+=normalize(suv)*band*shockwave*0.08;
+  }
+
+  // Scan line distortion during destruction
+  if(destruction>0.1){
+    float scanY=gl_FragCoord.y/r.y;
+    float scanLine=step(0.97,fract(scanY*200.0+t*50.0))*destruction;
+    uv.x+=scanLine*0.02*(sin(t*100.0+scanY*10.0));
+    // Horizontal tear
+    float tear=step(0.99,fract(sin(floor(scanY*30.0+t*8.0)*43758.5453)))*destruction;
+    uv.x+=tear*0.05*sign(sin(t*73.0));
+  }
+
   vec3 ro=vec3(0,0,4.5);
   vec3 rd=normalize(vec3(uv,-1.5));
 
-  // Raymarch
   float d=0.0;
   float totalDist=0.0;
   for(int i=0;i<80;i++){
@@ -247,30 +366,52 @@ void main(){
     vec3 p=ro+rd*totalDist;
     vec3 n=calcNormal(p);
 
-    // Lighting
     vec3 lightDir=normalize(vec3(1,1,2));
     float diff=max(dot(n,lightDir),0.0);
     float spec=pow(max(dot(reflect(-lightDir,n),-rd),0.0),32.0);
     float fres=pow(1.0-max(dot(n,-rd),0.0),3.0);
 
-    // Monochrome palette — white on black
     col=vec3(0.04)*diff+vec3(0.6)*spec+vec3(0.15)*fres;
 
-    // Subtle edge glow
     float edge=1.0-max(dot(n,-rd),0.0);
     col+=vec3(0.08)*pow(edge,2.0);
 
-    // Distance fog
+    // Destruction: hot edges glow red/cyan
+    if(destruction>0.05){
+      float hotEdge=pow(edge,3.0)*destruction;
+      col+=vec3(0.8,0.05,0.1)*hotEdge*1.5;
+      col+=vec3(0.0,0.6,0.7)*hotEdge*0.4*sin(t*10.0+p.y*5.0);
+    }
+
+    // Entropy rising: subtle color bleed
+    if(entropy>0.3){
+      float eb=(entropy-0.3)*1.43;
+      col.r+=fres*eb*0.15;
+      col.b+=edge*eb*0.08;
+    }
+
     float fog=exp(-totalDist*0.15);
     col*=fog;
   }
 
-  // Subtle ambient glow from SDF proximity (volumetric hint)
   float glow=exp(-totalDist*0.5)*0.03;
   col+=vec3(glow);
 
+  // Chromatic aberration during destruction
+  if(destruction>0.05){
+    float caStr=destruction*0.012;
+    vec2 caOff=uv*caStr;
+    // Fake CA by shifting color channels
+    col.r*=1.0+caStr*5.0*sin(uv.y*50.0+t*20.0);
+    col.b*=1.0+caStr*3.0*cos(uv.x*40.0-t*15.0);
+  }
+
   // Gamma
   col=pow(col,vec3(0.9));
+
+  // Noise grain during high entropy/destruction
+  float grain=(fract(sin(dot(gl_FragCoord.xy,vec2(12.9898,78.233))+t)*43758.5453)-0.5);
+  col+=grain*(0.02+destruction*0.06+entropy*0.03);
 
   gl_FragColor=vec4(col,1);
 }
@@ -300,12 +441,32 @@ const tLoc=gl.getUniformLocation(prog,'t');
 const rLoc=gl.getUniformLocation(prog,'r');
 const mouseLoc=gl.getUniformLocation(prog,'mouse');
 const mActiveLoc=gl.getUniformLocation(prog,'mActive');
+const entropyLoc=gl.getUniformLocation(prog,'entropy');
+const destructionLoc=gl.getUniformLocation(prog,'destruction');
+const shockwaveLoc=gl.getUniformLocation(prog,'shockwave');
+const shockCenterLoc=gl.getUniformLocation(prog,'shockCenter');
+
+var shockwave=0;
+var shockCx=0.5,shockCy=0.5;
+
+window.addEventListener('click',function(){
+  shockwave=1.0;
+  shockCx=AlicePointer.x;
+  shockCy=1.0-AlicePointer.y;
+});
 
 function draw(now){
+  shockwave*=0.96;
+  if(shockwave<0.01)shockwave=0;
+
   gl.uniform1f(tLoc,now*0.001);
   gl.uniform2f(rLoc,canvas.width,canvas.height);
   gl.uniform2f(mouseLoc,AlicePointer.x,AlicePointer.y);
   gl.uniform1f(mActiveLoc,AlicePointer.active?1.0:0.0);
+  gl.uniform1f(entropyLoc,AliceEntropy.state.level);
+  gl.uniform1f(destructionLoc,AliceEntropy.destructionProgress());
+  gl.uniform1f(shockwaveLoc,shockwave);
+  gl.uniform2f(shockCenterLoc,shockCx,shockCy);
   gl.drawArrays(gl.TRIANGLE_STRIP,0,4);
   requestAnimationFrame(draw);
 }
@@ -314,8 +475,8 @@ requestAnimationFrame(draw);
 </script>
 
 <!-- ================================================================== -->
-<!-- ALICE-Physics: Particle simulation with gravity & collision         -->
-<!-- Fixed-point inspired deterministic step, Verlet integration        -->
+<!-- ALICE-Physics: Violent particle system — destruction-aware          -->
+<!-- Verlet integration, red afterimages, massive click bursts          -->
 <!-- ================================================================== -->
 <script>
 (function(){
@@ -332,11 +493,7 @@ function resize(){
 resize();
 window.addEventListener('resize',resize);
 
-// --- ALICE-Physics: Particle system ---
-// Verlet integration (like XPBD position-based dynamics)
-// Deterministic fixed timestep (1/60)
-
-const N=120;
+const N=180;
 const DT=1/60;
 const GRAVITY=80;
 const DAMPING=0.998;
@@ -344,21 +501,23 @@ const BOUNCE=0.7;
 
 const particles=[];
 
-function spawn(){
-  const cx=canvas.width/2;
-  const cy=canvas.height/2;
+function spawn(cx_,cy_,isViolent){
+  const cx=cx_||canvas.width/2;
+  const cy=cy_||canvas.height/2;
   const angle=Math.random()*Math.PI*2;
-  const speed=30+Math.random()*120;
-  const r=Math.random()*200;
+  const baseSpeed=isViolent?200:30;
+  const speed=baseSpeed+Math.random()*(isViolent?500:120);
+  const r=isViolent?0:Math.random()*200;
   return{
     x:cx+Math.cos(angle)*r,
     y:cy+Math.sin(angle)*r,
-    px:0,py:0, // previous position (Verlet)
+    px:0,py:0,
     vx:Math.cos(angle+Math.PI/2)*speed*(Math.random()>0.5?1:-1),
-    vy:Math.sin(angle+Math.PI/2)*speed*(Math.random()>0.5?1:-1)-40,
+    vy:Math.sin(angle+Math.PI/2)*speed*(Math.random()>0.5?1:-1)-(isViolent?100:40),
     life:1,
-    decay:0.001+Math.random()*0.003,
-    size:1+Math.random()*2,
+    decay:isViolent?0.008+Math.random()*0.012:0.001+Math.random()*0.003,
+    size:isViolent?2+Math.random()*4:1+Math.random()*2,
+    hot:isViolent?1:0,
   };
 }
 
@@ -368,16 +527,16 @@ for(let i=0;i<N;i++){
   particles.push(p);
 }
 
-// --- ALICE-Physics step: Verlet + gravity + boundary collision ---
-
 function step(){
   const w=canvas.width,h=canvas.height;
   const cx=w/2,cy=h/2;
+  var destroying=AliceEntropy.isDestroying();
+  var intensity=AliceEntropy.destructionProgress();
+  var entropyLevel=AliceEntropy.state.level;
 
   for(let i=0;i<particles.length;i++){
     const p=particles[i];
 
-    // Verlet integration (position-based, like ALICE-Physics XPBD)
     const nx=p.x+p.vx*DT;
     const ny=p.y+p.vy*DT+GRAVITY*DT*DT;
 
@@ -389,82 +548,112 @@ function step(){
     p.x=nx;
     p.y=ny;
 
-    // Gentle attraction toward center (orbit)
+    // Attraction — weakens during destruction (particles escape)
     const dx=cx-p.x;
     const dy=cy-p.y;
     const dist=Math.sqrt(dx*dx+dy*dy)+1;
-    const force=2000/(dist+200);
+    var attractionForce=destroying?500:2000;
+    const force=attractionForce/(dist+200);
     p.vx+=dx/dist*force*DT;
     p.vy+=dy/dist*force*DT;
 
-    // Boundary collision (branchless-inspired: clamp + reflect)
+    // Destruction repulsion — violent outward push
+    if(destroying&&intensity>0.3){
+      var repulse=(intensity-0.3)*8000/(dist+50);
+      p.vx-=dx/dist*repulse*DT;
+      p.vy-=dy/dist*repulse*DT;
+    }
+
+    // Entropy agitation — random perturbation
+    if(entropyLevel>0.4){
+      var shake=(entropyLevel-0.4)*200;
+      p.vx+=(Math.random()-0.5)*shake*DT;
+      p.vy+=(Math.random()-0.5)*shake*DT;
+    }
+
     if(p.x<0){p.x=0;p.vx=Math.abs(p.vx)*BOUNCE;}
     if(p.x>w){p.x=w;p.vx=-Math.abs(p.vx)*BOUNCE;}
     if(p.y<0){p.y=0;p.vy=Math.abs(p.vy)*BOUNCE;}
     if(p.y>h){p.y=h;p.vy=-Math.abs(p.vy)*BOUNCE;}
 
-    // Life decay
     p.life-=p.decay;
+    p.hot*=0.98;
     if(p.life<=0){
-      const np=spawn();
+      const np=spawn(null,null,destroying);
       np.px=np.x;np.py=np.y;
       particles[i]=np;
     }
   }
 }
 
-// --- ALICE-View: Render particles ---
-
 function render(){
   ctx.clearRect(0,0,canvas.width,canvas.height);
 
   for(let i=0;i<particles.length;i++){
     const p=particles[i];
-    const alpha=p.life*0.4;
+    const alpha=p.life*0.5;
     if(alpha<0.01)continue;
+
+    // Color: white normally, red/cyan bleed during hot state
+    var r=255,g=255,b=255;
+    if(p.hot>0.1){
+      r=255;g=Math.round(255*(1-p.hot*0.8));b=Math.round(255*(1-p.hot*0.7));
+    }
 
     ctx.beginPath();
     ctx.arc(p.x,p.y,p.size,0,Math.PI*2);
-    ctx.fillStyle=`rgba(255,255,255,${alpha})`;
+    ctx.fillStyle='rgba('+r+','+g+','+b+','+alpha+')';
     ctx.fill();
 
-    // Motion trail (ALICE-View motion blur concept)
-    if(p.life>0.3){
+    // Motion trail — longer during destruction
+    var trailThreshold=AliceEntropy.isDestroying()?0.05:0.3;
+    if(p.life>trailThreshold){
       ctx.beginPath();
       ctx.moveTo(p.x,p.y);
       ctx.lineTo(p.px,p.py);
-      ctx.strokeStyle=`rgba(255,255,255,${alpha*0.3})`;
-      ctx.lineWidth=p.size*0.5;
+      var trailR=r,trailG=Math.max(0,g-50),trailB=Math.max(0,b-80);
+      ctx.strokeStyle='rgba('+trailR+','+trailG+','+trailB+','+alpha*0.4+')';
+      ctx.lineWidth=p.size*0.7;
       ctx.stroke();
     }
   }
 }
 
-// --- ALICE-Physics: Click burst — spawn particles at click position ---
-function burst(cx,cy,count){
+function burst(cx,cy,count,violent){
   for(var i=0;i<count;i++){
     var angle=Math.random()*Math.PI*2;
-    var speed=150+Math.random()*300;
+    var speed=violent?300+Math.random()*600:150+Math.random()*300;
     var p={
       x:cx,y:cy,
       px:cx,py:cy,
       vx:Math.cos(angle)*speed,
       vy:Math.sin(angle)*speed,
-      life:0.5+Math.random()*0.5,
-      decay:0.005+Math.random()*0.008,
-      size:1.5+Math.random()*2.5,
+      life:violent?0.7+Math.random()*0.3:0.5+Math.random()*0.5,
+      decay:violent?0.006+Math.random()*0.01:0.005+Math.random()*0.008,
+      size:violent?2.5+Math.random()*4:1.5+Math.random()*2.5,
+      hot:violent?0.8+Math.random()*0.2:0,
     };
     particles.push(p);
   }
-  // Trim to prevent unbounded growth
-  while(particles.length>N+200)particles.shift();
+  while(particles.length>N+400)particles.shift();
+}
+
+// Destruction event: massive center burst
+var lastPhase='calm';
+function checkDestructionBurst(){
+  var phase=AliceEntropy.state.phase;
+  if(phase==='destruction'&&lastPhase!=='destruction'){
+    burst(canvas.width/2,canvas.height/2,80,true);
+  }
+  lastPhase=phase;
 }
 
 function loop(){
-  // Check for click burst
   if(AlicePointer.clicked){
-    burst(AlicePointer.clickX,AlicePointer.clickY,25);
+    var isDestroying=AliceEntropy.isDestroying();
+    burst(AlicePointer.clickX,AlicePointer.clickY,isDestroying?60:40,isDestroying);
   }
+  checkDestructionBurst();
   step();
   render();
   requestAnimationFrame(loop);
@@ -474,18 +663,20 @@ requestAnimationFrame(loop);
 </script>
 
 <!-- ================================================================== -->
-<!-- ALICE-Text: Decode animation — characters resolve from noise        -->
-<!-- Exception-based: "Send only surprises, not predictions"            -->
+<!-- ALICE-Text: Perpetual corruption & repair cycle                     -->
+<!-- Characters continuously degrade and rebuild                        -->
 <!-- ================================================================== -->
 <script>
 (function(){
-const CHARS='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789@#$%&*';
+const CHARS='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789@#$%&*!?<>{}[]=/\\|~^';
+const GLITCH_CHARS='\u2588\u2593\u2592\u2591\u2580\u2584\u258C\u2590\u25A0\u25A1\u2573\u2571\u2572';
 const tagline=document.querySelector('.tagline');
 if(!tagline)return;
 
 const lines=['Don\'t send data.','Send the law.'];
 tagline.innerHTML='';
 
+var charEls=[];
 let charIndex=0;
 lines.forEach(function(line,li){
   if(li>0)tagline.appendChild(document.createElement('br'));
@@ -497,13 +688,13 @@ lines.forEach(function(line,li){
     span.dataset.final=line[i];
     span.dataset.idx=charIndex;
     tagline.appendChild(span);
+    charEls.push(span);
     charIndex++;
   }
 });
 
-// Scramble phase: randomize characters before they resolve
-const allChars=tagline.querySelectorAll('.char');
-allChars.forEach(function(el){
+// Initial decode animation
+charEls.forEach(function(el){
   const delay=parseFloat(el.style.animationDelay)*1000;
   const finalChar=el.dataset.final;
   if(finalChar===' '){el.innerHTML='&nbsp;';return;}
@@ -524,13 +715,70 @@ allChars.forEach(function(el){
   }
   requestAnimationFrame(scramble);
 });
+
+// Perpetual corruption cycle — driven by entropy
+var corruptedSet=new Set();
+
+function corruptionTick(){
+  var entropy=AliceEntropy.state.level;
+  var destroying=AliceEntropy.isDestroying();
+  var intensity=AliceEntropy.destructionProgress();
+
+  // Corruption probability scales with entropy
+  var corruptChance=destroying?0.15:entropy*0.04;
+
+  for(var i=0;i<charEls.length;i++){
+    var el=charEls[i];
+    var finalChar=el.dataset.final;
+    if(finalChar===' ')continue;
+
+    if(!corruptedSet.has(i)&&Math.random()<corruptChance){
+      // Corrupt this character
+      corruptedSet.add(i);
+      el.classList.add('corrupted');
+      var glitchSrc=destroying?GLITCH_CHARS:CHARS;
+      el.textContent=glitchSrc[Math.floor(Math.random()*glitchSrc.length)];
+
+      // Schedule repair
+      var repairDelay=destroying?800+Math.random()*1500:200+Math.random()*600;
+      (function(idx,element,fc){
+        setTimeout(function(){
+          element.textContent=fc;
+          element.classList.remove('corrupted');
+          corruptedSet.delete(idx);
+        },repairDelay);
+      })(i,el,finalChar);
+    }
+  }
+
+  // Full destruction event: corrupt everything, then rebuild
+  if(AliceEntropy.state.phase==='destruction'&&corruptedSet.size<charEls.length*0.5){
+    for(var j=0;j<charEls.length;j++){
+      if(charEls[j].dataset.final!==' '&&!corruptedSet.has(j)&&Math.random()<0.3){
+        corruptedSet.add(j);
+        charEls[j].classList.add('corrupted');
+        charEls[j].textContent=GLITCH_CHARS[Math.floor(Math.random()*GLITCH_CHARS.length)];
+        (function(idx,element,fc){
+          setTimeout(function(){
+            element.textContent=fc;
+            element.classList.remove('corrupted');
+            corruptedSet.delete(idx);
+          },1500+Math.random()*2000);
+        })(j,charEls[j],charEls[j].dataset.final);
+      }
+    }
+  }
+
+  setTimeout(corruptionTick,destroying?100:300+Math.random()*400);
+}
+// Start corruption cycle after initial decode completes
+setTimeout(corruptionTick,4000);
 })();
 </script>
 
 <!-- ================================================================== -->
-<!-- ALICE-Synth: FM Synthesis drone — Web Audio API                     -->
-<!-- 2-operator FM: carrier + modulator, SVF filter sweep               -->
-<!-- "Don't send waveforms, send the score" — parametric audio          -->
+<!-- ALICE-Synth: FM Synthesis with destruction — WaveShaper distortion  -->
+<!-- Noise bursts during destruction, aggressive click hits             -->
 <!-- ================================================================== -->
 <script>
 (function(){
@@ -539,39 +787,43 @@ let isPlaying=false;
 const btn=document.getElementById('soundToggle');
 if(!btn)return;
 
+function makeDistortionCurve(amount){
+  var n=256;
+  var curve=new Float32Array(n);
+  for(var i=0;i<n;i++){
+    var x=i*2/n-1;
+    curve[i]=(Math.PI+amount)*x/(Math.PI+amount*Math.abs(x));
+  }
+  return curve;
+}
+
 function startAudio(){
   if(audioCtx&&audioCtx.state!=='closed')return;
   audioCtx=new(window.AudioContext||window.webkitAudioContext)();
-  // iOS Safari: must resume synchronously inside user gesture
   var resumePromise=audioCtx.resume();
   if(resumePromise)resumePromise.catch(function(){});
 
-  // --- ALICE-Synth: 2-operator FM synthesis ---
-  // Carrier (operator 0): low drone
   const carrier=audioCtx.createOscillator();
   carrier.type='sine';
-  carrier.frequency.value=55; // A1
+  carrier.frequency.value=55;
 
-  // Modulator (operator 1): modulates carrier frequency
   const modulator=audioCtx.createOscillator();
   modulator.type='sine';
-  modulator.frequency.value=55.5; // slight detune for beating
+  modulator.frequency.value=55.5;
 
   const modGain=audioCtx.createGain();
-  modGain.gain.value=30; // FM modulation depth
+  modGain.gain.value=30;
 
-  // FM connection: modulator → modGain → carrier.frequency
   modulator.connect(modGain);
   modGain.connect(carrier.frequency);
 
-  // Second carrier layer (octave shimmer)
   const carrier2=audioCtx.createOscillator();
   carrier2.type='sine';
-  carrier2.frequency.value=110; // A2
+  carrier2.frequency.value=110;
 
   const mod2=audioCtx.createOscillator();
   mod2.type='triangle';
-  mod2.frequency.value=0.3; // slow LFO
+  mod2.frequency.value=0.3;
 
   const mod2Gain=audioCtx.createGain();
   mod2Gain.gain.value=8;
@@ -579,16 +831,22 @@ function startAudio(){
   mod2.connect(mod2Gain);
   mod2Gain.connect(carrier2.frequency);
 
-  // --- ALICE-Synth: State-Variable Filter (SVF) ---
+  // Sub-bass layer for destruction weight
+  const subBass=audioCtx.createOscillator();
+  subBass.type='sine';
+  subBass.frequency.value=27.5; // A0
+  const subGain=audioCtx.createGain();
+  subGain.gain.value=0;
+  subBass.connect(subGain);
+
   const filter=audioCtx.createBiquadFilter();
   filter.type='lowpass';
   filter.frequency.value=200;
   filter.Q.value=2;
 
-  // Slow filter sweep (breathing effect)
   const lfo=audioCtx.createOscillator();
   lfo.type='sine';
-  lfo.frequency.value=0.08; // very slow
+  lfo.frequency.value=0.08;
 
   const lfoGain=audioCtx.createGain();
   lfoGain.gain.value=150;
@@ -596,46 +854,112 @@ function startAudio(){
   lfo.connect(lfoGain);
   lfoGain.connect(filter.frequency);
 
-  // --- Master output with fade-in ---
-  // iOS Safari requires setValueAtTime before any ramp
+  // WaveShaper distortion — activated during destruction
+  const distortion=audioCtx.createWaveShaper();
+  distortion.curve=makeDistortionCurve(0);
+  distortion.oversample='4x';
+
   const master=audioCtx.createGain();
   const now=audioCtx.currentTime;
   master.gain.setValueAtTime(0.001,now);
   master.gain.linearRampToValueAtTime(0.12,now+3);
 
-  // Signal chain
+  // Signal chain: carriers → filter → distortion → master
   carrier.connect(filter);
   carrier2.connect(filter);
-  filter.connect(master);
+  subGain.connect(filter);
+  filter.connect(distortion);
+  distortion.connect(master);
   master.connect(audioCtx.destination);
 
-  // Start all oscillators
   carrier.start();
   modulator.start();
   carrier2.start();
   mod2.start();
   lfo.start();
+  subBass.start();
 
   isPlaying=true;
   btn.textContent='sound on';
   btn.classList.add('active');
 
-  // Store for cleanup
-  audioCtx._nodes={carrier,modulator,carrier2,mod2,lfo,master,filter};
+  audioCtx._nodes={carrier,modulator,carrier2,mod2,lfo,master,filter,distortion,subBass,subGain,modGain};
 
-  // --- ALICE-Synth: Click/Touch melodic hit (pentatonic scale) ---
-  // Map X position to pentatonic scale: C D E G A across 3 octaves
+  // Entropy-driven audio modulation loop
+  function entropyAudioLoop(){
+    if(!audioCtx||!isPlaying)return;
+    var entropy=AliceEntropy.state.level;
+    var destroying=AliceEntropy.isDestroying();
+    var intensity=AliceEntropy.destructionProgress();
+
+    // Distortion amount scales with entropy and destruction
+    var distAmount=entropy*20+intensity*80;
+    distortion.curve=makeDistortionCurve(distAmount);
+
+    // FM depth increases with entropy
+    modGain.gain.value=30+entropy*100+intensity*200;
+
+    // Sub-bass volume during destruction
+    var targetSub=destroying?0.15*intensity:entropy*0.03;
+    subGain.gain.value+=(targetSub-subGain.gain.value)*0.1;
+
+    // Filter opens up during destruction
+    var baseFreq=200+entropy*300+intensity*800;
+    filter.frequency.value+=(baseFreq-filter.frequency.value)*0.1;
+
+    setTimeout(entropyAudioLoop,50);
+  }
+  entropyAudioLoop();
+
+  // Noise burst function for destruction events
+  function noiseBurst(duration,volume){
+    if(!audioCtx||!isPlaying||audioCtx.state!=='running')return;
+    try{
+      var bufSize=audioCtx.sampleRate*duration;
+      var buf=audioCtx.createBuffer(1,bufSize,audioCtx.sampleRate);
+      var data=buf.getChannelData(0);
+      for(var i=0;i<bufSize;i++){
+        data[i]=(Math.random()*2-1)*Math.pow(1-i/bufSize,2);
+      }
+      var src=audioCtx.createBufferSource();
+      src.buffer=buf;
+      var gain=audioCtx.createGain();
+      var t0=audioCtx.currentTime;
+      gain.gain.setValueAtTime(volume,t0);
+      gain.gain.exponentialRampToValueAtTime(0.001,t0+duration);
+      src.connect(gain);
+      gain.connect(audioCtx.destination);
+      src.start(t0);
+    }catch(e){}
+  }
+  audioCtx._noiseBurst=noiseBurst;
+
+  // Listen for destruction events
+  var lastDestructionPhase='calm';
+  function destructionAudioCheck(){
+    if(!audioCtx||!isPlaying)return;
+    var phase=AliceEntropy.state.phase;
+    if(phase==='destruction'&&lastDestructionPhase!=='destruction'){
+      noiseBurst(0.5,0.2);
+      setTimeout(function(){noiseBurst(0.3,0.1);},300);
+    }
+    lastDestructionPhase=phase;
+    setTimeout(destructionAudioCheck,100);
+  }
+  destructionAudioCheck();
+
+  // Click synth hit — more aggressive
   var PENTA_SEMITONES=[0,2,4,7,9,12,14,16,19,21,24,26,28,31,33,36];
   function xToFreq(x){
     var idx=Math.floor(x*PENTA_SEMITONES.length);
     idx=Math.max(0,Math.min(PENTA_SEMITONES.length-1,idx));
-    // C3 = 130.81 Hz as base, semitone ratio = 2^(1/12)
     return 130.81*Math.pow(2,PENTA_SEMITONES[idx]/12);
   }
 
   function synthHit(){
     if(!audioCtx||!isPlaying||audioCtx.state!=='running')return;
     try{
+      var destroying=AliceEntropy.isDestroying();
       var hit=audioCtx.createOscillator();
       var hitMod=audioCtx.createOscillator();
       var hitModGain=audioCtx.createGain();
@@ -643,25 +967,30 @@ function startAudio(){
       var t0=audioCtx.currentTime;
 
       var freq=xToFreq(AlicePointer.x);
-      hit.type='sine';
+      hit.type=destroying?'sawtooth':'sine';
       hit.frequency.value=freq;
       hitMod.type='sine';
-      hitMod.frequency.value=freq*2.5;
-      hitModGain.gain.value=freq*2;
+      hitMod.frequency.value=freq*(destroying?4.0:2.5);
+      hitModGain.gain.value=freq*(destroying?6:2);
 
       hitMod.connect(hitModGain);
       hitModGain.connect(hit.frequency);
 
+      var vol=destroying?0.25:0.15;
+      var decay=destroying?0.06:0.12;
       hitEnv.gain.setValueAtTime(0.001,t0);
-      hitEnv.gain.linearRampToValueAtTime(0.15,t0+0.003);
-      hitEnv.gain.exponentialRampToValueAtTime(0.001,t0+0.12);
+      hitEnv.gain.linearRampToValueAtTime(vol,t0+0.002);
+      hitEnv.gain.exponentialRampToValueAtTime(0.001,t0+decay);
 
       hit.connect(hitEnv);
       hitEnv.connect(audioCtx.destination);
       hit.start(t0);
       hitMod.start(t0);
-      hit.stop(t0+0.15);
-      hitMod.stop(t0+0.15);
+      hit.stop(t0+decay+0.05);
+      hitMod.stop(t0+decay+0.05);
+
+      // During destruction, add noise on click
+      if(destroying){noiseBurst(0.08,0.08);}
     }catch(e){}
   }
   window.addEventListener('click',synthHit);
@@ -699,22 +1028,16 @@ btn.addEventListener('touchend',toggle,{passive:false});
 
 <!-- ================================================================== -->
 <!-- ALICE-Motion: S-curve & Bezier easing functions                     -->
-<!-- Replaces CSS ease-out with 7th-order polynomial S-curve            -->
-<!-- Used by ALICE-Animation timeline below                             -->
 <!-- ================================================================== -->
 <script>
 var AliceMotion=(function(){
-  // ALICE-Motion: 7th-order S-curve (smoother than cubic-bezier)
-  // f(t) = 35t^4 - 84t^5 + 70t^6 - 20t^7 (perceptually smooth)
   function sCurve7(t){
     t=Math.max(0,Math.min(1,t));
     var t2=t*t,t4=t2*t2;
     return 35*t4-84*t4*t+70*t4*t2-20*t4*t2*t;
   }
 
-  // ALICE-Motion: Cubic Bezier evaluator (De Casteljau)
   function cubicBezier(p1x,p1y,p2x,p2y,t){
-    // Newton-Raphson to find t for x, then evaluate y
     var cx=3*p1x,bx=3*(p2x-p1x)-cx,ax=1-cx-bx;
     var cy=3*p1y,by=3*(p2y-p1y)-cy,ay=1-cy-by;
     var x=t;
@@ -729,7 +1052,6 @@ var AliceMotion=(function(){
     return((ay*x+by)*x+cy)*x;
   }
 
-  // ALICE-Motion: Elastic ease-out (spring-damper model)
   function elasticOut(t){
     if(t<=0)return 0;if(t>=1)return 1;
     return Math.pow(2,-10*t)*Math.sin((t-0.075)*2*Math.PI/0.3)+1;
@@ -740,17 +1062,16 @@ var AliceMotion=(function(){
 </script>
 
 <!-- ================================================================== -->
-<!-- ALICE-Animation: Keyframe timeline engine                          -->
-<!-- Drives continuous animations: subtitle pulse, author breathe       -->
+<!-- ALICE-Animation: Keyframe timeline — entropy-reactive               -->
 <!-- ================================================================== -->
 <script>
 (function(){
   var tracks=[];
   var startTime=performance.now();
 
-  // Track: subtitle opacity pulse (ALICE-Animation keyframe track)
   var subtitle=document.querySelector('.subtitle');
   var author=document.querySelector('.author');
+  var overlay=document.querySelector('.overlay');
 
   if(subtitle){
     tracks.push({el:subtitle,prop:'opacity',
@@ -770,11 +1091,9 @@ var AliceMotion=(function(){
     var duration=kf[kf.length-1].t;
     var t=track.loop?(elapsed%duration):Math.min(elapsed,duration);
 
-    // Find keyframe pair
     for(var i=0;i<kf.length-1;i++){
       if(t>=kf[i].t&&t<=kf[i+1].t){
         var local=(t-kf[i].t)/(kf[i+1].t-kf[i].t);
-        // Use ALICE-Motion S-curve for interpolation
         var eased=AliceMotion.sCurve7(local);
         var val=kf[i].v+(kf[i+1].v-kf[i].v)*eased;
         track.el.style[track.prop]=val;
@@ -785,6 +1104,17 @@ var AliceMotion=(function(){
 
   function tick(now){
     for(var i=0;i<tracks.length;i++)evalTrack(tracks[i],now);
+
+    // Overlay shake during destruction
+    if(overlay&&AliceEntropy.isDestroying()){
+      var intensity=AliceEntropy.destructionProgress();
+      var shakeX=(Math.random()-0.5)*intensity*8;
+      var shakeY=(Math.random()-0.5)*intensity*6;
+      overlay.style.transform='translate('+shakeX+'px,'+shakeY+'px)';
+    }else if(overlay){
+      overlay.style.transform='';
+    }
+
     requestAnimationFrame(tick);
   }
   requestAnimationFrame(tick);
@@ -792,15 +1122,13 @@ var AliceMotion=(function(){
 </script>
 
 <!-- ================================================================== -->
-<!-- ALICE-Crypto: FNV-1a page integrity hash + Ed25519 signature mock  -->
-<!-- Displays rolling hash of page state in top-left corner             -->
+<!-- ALICE-Crypto: FNV-1a + rolling hash display                        -->
 <!-- ================================================================== -->
 <script>
 (function(){
   var sigEl=document.getElementById('sigBlock');
   if(!sigEl)return;
 
-  // ALICE-Crypto: FNV-1a hash (same algorithm used in all ALICE crates)
   function fnv1a(str){
     var h=0xcbf29ce4n;
     for(var i=0;i<str.length;i++){
@@ -810,11 +1138,9 @@ var AliceMotion=(function(){
     return h;
   }
 
-  // Generate page content hash
   var pageHash=fnv1a(document.documentElement.outerHTML.substring(0,4096));
   var hex=pageHash.toString(16).padStart(8,'0');
 
-  // Mock Ed25519 signature display (ALICE-Auth style)
   var ts=Math.floor(Date.now()/1000).toString(16);
   var sig1='a11ce'+hex+ts;
   var sig2=fnv1a(sig1).toString(16).padStart(8,'0');
@@ -828,15 +1154,13 @@ var AliceMotion=(function(){
 </script>
 
 <!-- ================================================================== -->
-<!-- ALICE-Codec: Page compression ratio display                        -->
-<!-- Measures raw vs theoretical compressed size                        -->
+<!-- ALICE-Codec: Compression ratio + FPS + entropy display             -->
 <!-- ================================================================== -->
 <script>
 (function(){
   var el=document.getElementById('codecStat');
   if(!el)return;
 
-  // ALICE-Codec: measure page payload
   var raw=document.documentElement.outerHTML.length;
   var src=document.documentElement.outerHTML;
   var bigrams=new Set();
@@ -846,29 +1170,30 @@ var AliceMotion=(function(){
   var compressed=Math.round(raw*ratio);
   var codecStr='ALICE-Codec: '+raw+' B \u2192 ~'+compressed+' B ('+Math.round(raw/compressed)+'x)';
 
-  // FPS counter (exponential moving average)
   var frames=0;
   var lastTime=performance.now();
-  var fps=60;
   var fpsSmooth=60;
 
   function health(f){
-    if(f>=55)return'\u2588 optimal';  // solid block
-    if(f>=40)return'\u2593 nominal';  // dark shade
-    if(f>=25)return'\u2592 degraded'; // medium shade
-    return'\u2591 critical';          // light shade
+    if(f>=55)return'\u2588 optimal';
+    if(f>=40)return'\u2593 nominal';
+    if(f>=25)return'\u2592 degraded';
+    return'\u2591 critical';
   }
 
   function updateFps(now){
     frames++;
     var dt=now-lastTime;
     if(dt>=500){
-      fps=frames/(dt*0.001);
-      fpsSmooth+=(fps-fpsSmooth)*0.3; // EMA smoothing
+      var fps=frames/(dt*0.001);
+      fpsSmooth+=(fps-fpsSmooth)*0.3;
       frames=0;
       lastTime=now;
       var f=Math.round(fpsSmooth);
-      el.textContent=codecStr+' \u2502 '+f+' fps '+health(f);
+      var eLevel=Math.round(AliceEntropy.state.level*100);
+      var phase=AliceEntropy.state.phase;
+      var phaseStr=phase==='destruction'?'\u26A1 DESTROY':phase==='rebirth'?'\u21BB REBIRTH':'\u2022 '+eLevel+'%';
+      el.textContent=codecStr+' \u2502 '+f+' fps '+health(f)+' \u2502 entropy: '+phaseStr;
     }
     requestAnimationFrame(updateFps);
   }
@@ -877,8 +1202,7 @@ var AliceMotion=(function(){
 </script>
 
 <!-- ================================================================== -->
-<!-- ALICE-Kinematics: Inverse Kinematics chain visualization           -->
-<!-- 2D FABRIK solver — ghost limbs reaching toward SDF center          -->
+<!-- ALICE-Kinematics: 8 IK chains — spasm during destruction           -->
 <!-- ================================================================== -->
 <script>
 (function(){
@@ -895,24 +1219,22 @@ function resize(){
 resize();
 window.addEventListener('resize',resize);
 
-// --- ALICE-Kinematics: FABRIK IK Solver ---
-// Forward And Backward Reaching Inverse Kinematics
+var CHAINS=8;
+var SEGMENTS=8;
+var SEG_LEN=30;
 
-var CHAINS=4;
-var SEGMENTS=6;
-var SEG_LEN=35;
-
-// Create IK chains anchored at screen edges
 var chains=[];
 function initChains(){
   chains=[];
   var w=canvas.width,h=canvas.height;
-  var anchors=[
-    {x:0,y:h*0.3},
-    {x:w,y:h*0.7},
-    {x:w*0.3,y:0},
-    {x:w*0.7,y:h}
-  ];
+  var anchors=[];
+  for(var i=0;i<CHAINS;i++){
+    var angle=i/CHAINS*Math.PI*2;
+    anchors.push({
+      x:w/2+Math.cos(angle)*Math.max(w,h)*0.55,
+      y:h/2+Math.sin(angle)*Math.max(w,h)*0.55
+    });
+  }
   for(var c=0;c<CHAINS;c++){
     var joints=[];
     for(var i=0;i<=SEGMENTS;i++){
@@ -924,12 +1246,10 @@ function initChains(){
 initChains();
 window.addEventListener('resize',function(){setTimeout(initChains,100);});
 
-// FABRIK solve: reach toward target, then pull back to anchor
 function solveFABRIK(chain,tx,ty,iterations){
   var joints=chain.joints;
   var n=joints.length;
   for(var iter=0;iter<iterations;iter++){
-    // Forward pass: end-effector → target
     joints[n-1].x=tx;joints[n-1].y=ty;
     for(var i=n-2;i>=0;i--){
       var dx=joints[i].x-joints[i+1].x;
@@ -938,7 +1258,6 @@ function solveFABRIK(chain,tx,ty,iterations){
       joints[i].x=joints[i+1].x+dx/d*SEG_LEN;
       joints[i].y=joints[i+1].y+dy/d*SEG_LEN;
     }
-    // Backward pass: root → anchor
     joints[0].x=chain.anchor.x;joints[0].y=chain.anchor.y;
     for(var i=1;i<n;i++){
       var dx=joints[i].x-joints[i-1].x;
@@ -955,8 +1274,10 @@ function render(now){
   var t=now*0.001;
   var cx=canvas.width/2;
   var cy=canvas.height/2;
+  var destroying=AliceEntropy.isDestroying();
+  var intensity=AliceEntropy.destructionProgress();
+  var entropy=AliceEntropy.state.level;
 
-  // Target: follow mouse when active, otherwise orbit center
   var tx,ty;
   if(AlicePointer.active){
     tx=AlicePointer.px;
@@ -967,30 +1288,136 @@ function render(now){
   }
 
   for(var c=0;c<chains.length;c++){
-    // Each chain targets slightly offset position
-    var ox=Math.sin(t*0.5+c*1.57)*40;
-    var oy=Math.cos(t*0.4+c*1.57)*30;
+    var phaseOffset=c*Math.PI*2/CHAINS;
+    var ox=Math.sin(t*0.5+phaseOffset)*40;
+    var oy=Math.cos(t*0.4+phaseOffset)*30;
+
+    // Spasm during destruction — erratic target jitter
+    if(destroying){
+      ox+=(Math.random()-0.5)*intensity*200;
+      oy+=(Math.random()-0.5)*intensity*200;
+    }else if(entropy>0.5){
+      var shake=(entropy-0.5)*60;
+      ox+=(Math.random()-0.5)*shake;
+      oy+=(Math.random()-0.5)*shake;
+    }
+
     solveFABRIK(chains[c],tx+ox,ty+oy,5);
 
     var joints=chains[c].joints;
+
+    // Line color: white → red during destruction
+    var lineAlpha=0.08+entropy*0.12+intensity*0.2;
+    var lineR=destroying?255:255;
+    var lineG=destroying?Math.round(255*(1-intensity*0.7)):255;
+    var lineB=destroying?Math.round(255*(1-intensity*0.6)):255;
+
     ctx.beginPath();
     ctx.moveTo(joints[0].x,joints[0].y);
     for(var i=1;i<joints.length;i++){
       ctx.lineTo(joints[i].x,joints[i].y);
     }
-    ctx.strokeStyle='rgba(255,255,255,0.12)';
-    ctx.lineWidth=1.5;
+    ctx.strokeStyle='rgba('+lineR+','+lineG+','+lineB+','+lineAlpha+')';
+    ctx.lineWidth=1.5+intensity*2;
     ctx.stroke();
 
-    // Joint dots
     for(var i=0;i<joints.length;i++){
-      var alpha=0.06+0.1*(i/joints.length);
+      var alpha=0.04+0.12*(i/joints.length)+intensity*0.15;
+      var dotSize=1.5+2*(i/joints.length)+intensity*2;
       ctx.beginPath();
-      ctx.arc(joints[i].x,joints[i].y,1.5+1.5*(i/joints.length),0,Math.PI*2);
-      ctx.fillStyle='rgba(255,255,255,'+alpha+')';
+      ctx.arc(joints[i].x,joints[i].y,dotSize,0,Math.PI*2);
+      ctx.fillStyle='rgba('+lineR+','+lineG+','+lineB+','+alpha+')';
       ctx.fill();
     }
   }
+  requestAnimationFrame(render);
+}
+requestAnimationFrame(render);
+})();
+</script>
+
+<!-- ================================================================== -->
+<!-- ALICE-Glitch: Full-screen glitch overlay canvas                     -->
+<!-- Scan lines, horizontal tears, static noise during destruction      -->
+<!-- ================================================================== -->
+<script>
+(function(){
+var canvas=document.getElementById('glitch');
+var ctx=canvas.getContext('2d');
+
+function resize(){
+  var dpr=Math.min(window.devicePixelRatio,2);
+  canvas.width=window.innerWidth*dpr;
+  canvas.height=window.innerHeight*dpr;
+  canvas.style.width=window.innerWidth+'px';
+  canvas.style.height=window.innerHeight+'px';
+}
+resize();
+window.addEventListener('resize',resize);
+
+function render(now){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  var entropy=AliceEntropy.state.level;
+  var destroying=AliceEntropy.isDestroying();
+  var intensity=AliceEntropy.destructionProgress();
+
+  if(entropy<0.2&&!destroying){
+    requestAnimationFrame(render);
+    return;
+  }
+
+  var w=canvas.width,h=canvas.height;
+
+  // Scan lines — thin horizontal lines that sweep
+  if(entropy>0.3||destroying){
+    var scanCount=destroying?Math.floor(8+intensity*20):Math.floor((entropy-0.3)*10);
+    ctx.globalAlpha=destroying?0.15+intensity*0.2:entropy*0.05;
+    for(var i=0;i<scanCount;i++){
+      var y=Math.random()*h;
+      var thickness=1+Math.random()*(destroying?4:2);
+      ctx.fillStyle=Math.random()>0.7?'rgba(255,23,68,0.4)':'rgba(255,255,255,0.3)';
+      ctx.fillRect(0,y,w,thickness);
+    }
+  }
+
+  // Horizontal tear blocks — displaced rectangles
+  if(destroying&&intensity>0.3){
+    var tearCount=Math.floor(intensity*6);
+    for(var i=0;i<tearCount;i++){
+      var ty=Math.random()*h;
+      var th=5+Math.random()*20*intensity;
+      var tx=(Math.random()-0.5)*w*0.1*intensity;
+      ctx.globalAlpha=0.04+intensity*0.08;
+      ctx.fillStyle=Math.random()>0.5?'rgba(0,255,255,0.2)':'rgba(255,0,80,0.15)';
+      ctx.fillRect(tx,ty,w,th);
+    }
+  }
+
+  // Static noise grain — scattered pixels
+  if(entropy>0.5||destroying){
+    var noiseAmount=destroying?2000*intensity:Math.floor((entropy-0.5)*800);
+    ctx.globalAlpha=destroying?0.3*intensity:0.1;
+    for(var i=0;i<noiseAmount;i++){
+      var nx=Math.random()*w;
+      var ny=Math.random()*h;
+      var ns=1+Math.random()*2;
+      ctx.fillStyle=Math.random()>0.8?'rgba(255,23,68,0.5)':'rgba(255,255,255,0.4)';
+      ctx.fillRect(nx,ny,ns,ns);
+    }
+  }
+
+  // Large glitch block during peak destruction
+  if(destroying&&intensity>0.6&&Math.random()>0.7){
+    ctx.globalAlpha=0.06;
+    var bx=Math.random()*w*0.5;
+    var by=Math.random()*h;
+    var bw=w*0.3+Math.random()*w*0.4;
+    var bh=10+Math.random()*60;
+    ctx.fillStyle=Math.random()>0.5?'rgba(0,255,255,0.3)':'rgba(255,0,60,0.2)';
+    ctx.fillRect(bx,by,bw,bh);
+  }
+
+  ctx.globalAlpha=1;
   requestAnimationFrame(render);
 }
 requestAnimationFrame(render);
