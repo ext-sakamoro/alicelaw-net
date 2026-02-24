@@ -269,50 +269,23 @@ float opSmoothSubtraction(float d1,float d2,float k){
 
 mat2 rot(float a){float c=cos(a),s=sin(a);return mat2(c,-s,s,c);}
 
-// 3D hash for Voronoi cell generation
+// Hash for cell generation
 vec3 hash33(vec3 p){
   p=vec3(dot(p,vec3(127.1,311.7,74.7)),dot(p,vec3(269.5,183.3,246.1)),dot(p,vec3(113.5,271.9,124.6)));
   return fract(sin(p)*43758.5453);
 }
 
-// 3D Voronoi: returns vec4(cellHash.xyz, edgeDist)
-vec4 voronoi3d(vec3 p){
-  vec3 n=floor(p);
+// Grid shatter: O(1) per point, no loops
+// Cell = floor(p), hash for attributes, fract for edge distance
+vec4 gridShatter(vec3 p){
+  vec3 cell=floor(p);
   vec3 f=fract(p);
-  float md=10.0,sd2=10.0;
-  vec3 ch=vec3(0.0);
-  for(int x=-1;x<=1;x++)
-  for(int y=-1;y<=1;y++)
-  for(int z=-1;z<=1;z++){
-    vec3 g=vec3(float(x),float(y),float(z));
-    vec3 o=hash33(n+g);
-    vec3 rv=g+o-f;
-    float dd=dot(rv,rv);
-    if(dd<md){sd2=md;md=dd;ch=o;}
-    else if(dd<sd2){sd2=dd;}
-  }
-  return vec4(ch,sqrt(sd2)-sqrt(md));
+  vec3 h=hash33(cell);
+  // Edge distance: min distance to any cell face
+  vec3 df=min(f,1.0-f);
+  float edgeDist=min(df.x,min(df.y,df.z));
+  return vec4(h,edgeDist);
 }
-
-// 2D Voronoi (LOD far): 9 cells instead of 27
-vec3 voronoi2d(vec2 p){
-  vec2 n=floor(p);
-  vec2 f=fract(p);
-  float md=10.0,sd2=10.0;
-  vec2 ch=vec2(0.0);
-  for(int x=-1;x<=1;x++)
-  for(int y=-1;y<=1;y++){
-    vec2 g=vec2(float(x),float(y));
-    vec2 o=hash33(vec3(n+g,0.0)).xy;
-    vec2 rv=g+o-f;
-    float dd=dot(rv,rv);
-    if(dd<md){sd2=md;md=dd;ch=o;}
-    else if(dd<sd2){sd2=dd;}
-  }
-  return vec3(ch,sqrt(sd2)-sqrt(md));
-}
-
-float gLod=0.0;
 
 float scene(vec3 p){
   float time=t*0.4;
@@ -320,20 +293,14 @@ float scene(vec3 p){
   p.xz*=rot(time*0.3);
   p.yz*=rot(time*0.2);
 
-  // Voronoi shatter: compute in object space, displace each cell outward
+  // Grid shatter: O(1) cell lookup, each cell displaced outward
   float crackDist=10.0;
   if(shatter>0.01){
-    vec4 voro;
-    if(gLod<4.0){
-      voro=voronoi3d(p*2.0);
-    }else{
-      vec3 v2=voronoi2d(p.xy*2.0);
-      voro=vec4(v2.xy,0.5,v2.z);
-    }
-    crackDist=voro.w;
-    vec3 cellDir=normalize(voro.xyz-0.5);
+    vec4 gs=gridShatter(p*2.0);
+    crackDist=gs.w;
+    vec3 cellDir=normalize(gs.xyz-0.5);
     p+=cellDir*shatter*1.2;
-    float ca=(voro.x+voro.y)*6.28*shatter*0.3;
+    float ca=(gs.x+gs.y)*6.28*shatter*0.3;
     p.xy*=rot(ca);
     p.yz*=rot(ca*0.7);
   }
@@ -414,7 +381,6 @@ void main(){
   float totalDist=0.0;
   for(int i=0;i<80;i++){
     vec3 p=ro+rd*totalDist;
-    gLod=totalDist;
     d=scene(p);
     totalDist+=d;
     if(d<0.001||totalDist>20.0)break;
@@ -434,16 +400,11 @@ void main(){
     float brokenDiff=mix(diff,1.0-diff,destruction*0.6);
     float brokenSpec=spec*(1.0-destruction*0.7);
 
-    // SSS: measure thickness along light direction
-    // Thin geometry = light passes through = brighter
+    // SSS: 2-sample thickness measurement
     float sss=0.0;
-    float sssW=1.0;
-    for(int i=1;i<=3;i++){
-      float h=0.06+0.14*float(i);
-      float sd=scene(p+lightDir*h);
-      sss+=(h-max(sd,0.0))*sssW;
-      sssW*=0.5;
-    }
+    float sd1=scene(p+lightDir*0.15);
+    float sd2=scene(p+lightDir*0.4);
+    sss=(0.15-max(sd1,0.0))+(0.4-max(sd2,0.0))*0.5;
     sss=clamp(sss*3.0,0.0,1.0);
     // Subtle always; intensifies during shatter (thin broken pieces)
     float sssStrength=0.12+shatter*0.6;
