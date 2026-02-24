@@ -294,6 +294,26 @@ vec4 voronoi3d(vec3 p){
   return vec4(ch,sqrt(sd2)-sqrt(md));
 }
 
+// 2D Voronoi (LOD far): 9 cells instead of 27
+vec3 voronoi2d(vec2 p){
+  vec2 n=floor(p);
+  vec2 f=fract(p);
+  float md=10.0,sd2=10.0;
+  vec2 ch=vec2(0.0);
+  for(int x=-1;x<=1;x++)
+  for(int y=-1;y<=1;y++){
+    vec2 g=vec2(float(x),float(y));
+    vec2 o=hash33(vec3(n+g,0.0)).xy;
+    vec2 rv=g+o-f;
+    float dd=dot(rv,rv);
+    if(dd<md){sd2=md;md=dd;ch=o;}
+    else if(dd<sd2){sd2=dd;}
+  }
+  return vec3(ch,sqrt(sd2)-sqrt(md));
+}
+
+float gLod=0.0;
+
 float scene(vec3 p){
   float time=t*0.4;
 
@@ -303,7 +323,13 @@ float scene(vec3 p){
   // Voronoi shatter: compute in object space, displace each cell outward
   float crackDist=10.0;
   if(shatter>0.01){
-    vec4 voro=voronoi3d(p*2.0);
+    vec4 voro;
+    if(gLod<4.0){
+      voro=voronoi3d(p*2.0);
+    }else{
+      vec3 v2=voronoi2d(p.xy*2.0);
+      voro=vec4(v2.xy,0.5,v2.z);
+    }
     crackDist=voro.w;
     vec3 cellDir=normalize(voro.xyz-0.5);
     p+=cellDir*shatter*1.2;
@@ -388,6 +414,7 @@ void main(){
   float totalDist=0.0;
   for(int i=0;i<80;i++){
     vec3 p=ro+rd*totalDist;
+    gLod=totalDist;
     d=scene(p);
     totalDist+=d;
     if(d<0.001||totalDist>20.0)break;
