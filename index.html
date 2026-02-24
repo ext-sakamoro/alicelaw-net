@@ -116,15 +116,50 @@ var AliceEntropy=(function(){
     }
     state.level=Math.max(0,Math.min(1,state.level));
     if(fillEl)fillEl.style.width=(state.level*100)+'%';
+    updateShatter(now);
     requestAnimationFrame(update);
   }
   requestAnimationFrame(update);
 
+  // Shatter system — independent from entropy, every 3-4 min
+  var shatter={value:0,phase:'idle',startTime:0};
+  var SHATTER_INTERVAL=45000+Math.random()*45000; // first: 45-90s
+  var SHATTER_BREAK=400;   // instant break (ms)
+  var SHATTER_DRIFT=3000;  // pieces float
+  var SHATTER_REFORM=4000; // slow reassembly
+  var lastShatterCheck=0;
+
+  function updateShatter(now){
+    if(shatter.phase==='idle'){
+      if(now-lastShatterCheck>SHATTER_INTERVAL){
+        shatter.phase='break';
+        shatter.startTime=now;
+        lastShatterCheck=now;
+        SHATTER_INTERVAL=180000+Math.random()*60000;
+      }
+    }else if(shatter.phase==='break'){
+      var t=Math.min((now-shatter.startTime)/SHATTER_BREAK,1.0);
+      shatter.value=t*t*t; // cubic ease-in — sudden snap
+      if(t>=1){shatter.phase='drift';shatter.startTime=now;}
+    }else if(shatter.phase==='drift'){
+      shatter.value=1.0;
+      if(now-shatter.startTime>SHATTER_DRIFT){shatter.phase='reform';shatter.startTime=now;}
+    }else if(shatter.phase==='reform'){
+      var t=Math.min((now-shatter.startTime)/SHATTER_REFORM,1.0);
+      // Smooth ease-out — pieces gently return
+      var ease=1.0-Math.pow(1.0-t,3.0);
+      shatter.value=1.0-ease;
+      if(t>=1){shatter.phase='idle';shatter.value=0;}
+    }
+  }
+
   return{
     state:state,
+    shatter:shatter,
     addClick:function(){state.clickAccum+=CLICK_BOOST;},
     isDestroying:function(){return state.phase==='destruction'||state.phase==='rebirth';},
-    destructionProgress:function(){return state.intensity;}
+    destructionProgress:function(){return state.intensity;},
+    updateShatter:updateShatter
   };
 })();
 </script>
@@ -206,6 +241,7 @@ uniform vec2 mouse;
 uniform float mActive;
 uniform float entropy;
 uniform float destruction;
+uniform float shatter;
 
 float sdSphere(vec3 p,float s){return length(p)-s;}
 
@@ -219,7 +255,6 @@ float sdOctahedron(vec3 p,float s){
   return (p.x+p.y+p.z-s)*0.57735027;
 }
 
-// smooth union — k parameter is the key. when k→0, union breaks apart
 float opSmoothUnion(float d1,float d2,float k){
   k=max(k,0.001);
   float h=clamp(0.5+0.5*(d2-d1)/k,0.0,1.0);
@@ -234,10 +269,29 @@ float opSmoothSubtraction(float d1,float d2,float k){
 
 mat2 rot(float a){float c=cos(a),s=sin(a);return mat2(c,-s,s,c);}
 
-float hash(vec3 p){
-  p=fract(p*vec3(443.897,441.423,437.195));
-  p+=dot(p,p.yzx+19.19);
-  return fract((p.x+p.y)*p.z);
+// 3D hash for Voronoi cell generation
+vec3 hash33(vec3 p){
+  p=vec3(dot(p,vec3(127.1,311.7,74.7)),dot(p,vec3(269.5,183.3,246.1)),dot(p,vec3(113.5,271.9,124.6)));
+  return fract(sin(p)*43758.5453);
+}
+
+// 3D Voronoi: returns vec4(cellHash.xyz, edgeDist)
+vec4 voronoi3d(vec3 p){
+  vec3 n=floor(p);
+  vec3 f=fract(p);
+  float md=10.0,sd2=10.0;
+  vec3 ch=vec3(0.0);
+  for(int x=-1;x<=1;x++)
+  for(int y=-1;y<=1;y++)
+  for(int z=-1;z<=1;z++){
+    vec3 g=vec3(float(x),float(y),float(z));
+    vec3 o=hash33(n+g);
+    vec3 rv=g+o-f;
+    float dd=dot(rv,rv);
+    if(dd<md){sd2=md;md=dd;ch=o;}
+    else if(dd<sd2){sd2=dd;}
+  }
+  return vec4(ch,sqrt(sd2)-sqrt(md));
 }
 
 float scene(vec3 p){
@@ -246,13 +300,24 @@ float scene(vec3 p){
   p.xz*=rot(time*0.3);
   p.yz*=rot(time*0.2);
 
-  // Destruction: space itself warps asymmetrically
+  // Voronoi shatter: compute in object space, displace each cell outward
+  float crackDist=10.0;
+  if(shatter>0.01){
+    vec4 voro=voronoi3d(p*2.0);
+    crackDist=voro.w;
+    vec3 cellDir=normalize(voro.xyz-0.5);
+    p+=cellDir*shatter*1.2;
+    float ca=(voro.x+voro.y)*6.28*shatter*0.3;
+    p.xy*=rot(ca);
+    p.yz*=rot(ca*0.7);
+  }
+
+  // Destruction: space warps asymmetrically
   if(destruction>0.01){
-    // Non-uniform shear — geometry loses its coherence
-    float shear=destruction*0.8;
-    p.x+=sin(p.y*2.1+t*1.7)*shear;
-    p.z+=cos(p.x*1.8+t*2.3)*shear*0.7;
-    p.y+=sin(p.z*2.5+t*1.3)*shear*0.5;
+    float sh=destruction*0.8;
+    p.x+=sin(p.y*2.1+t*1.7)*sh;
+    p.z+=cos(p.x*1.8+t*2.3)*sh*0.7;
+    p.y+=sin(p.z*2.5+t*1.3)*sh*0.5;
   }
 
   float morph=sin(time*0.7)*0.5+0.5;
@@ -268,25 +333,19 @@ float scene(vec3 p){
   tp2.xz*=rot(time*0.3+1.57);
   float d3=sdTorus(tp2,vec2(1.8,0.08));
 
-  // smooth union k degrades: geometry separates as k→0
-  // normal state: k=0.3 (smooth blend)
-  // destruction: k→0.01 (hard separation, pieces drift apart)
   float k=0.3*(1.0-destruction*0.95);
 
   float d=opSmoothUnion(d1,d2,k);
   d=opSmoothUnion(d,d3,k);
 
-  // Breathing hole — during destruction it tears open wide
   float breath=sin(time*1.2)*0.3+0.5;
   float holeSize=breath+destruction*1.2;
   float hole=sdSphere(p,holeSize);
   float holeK=0.2*(1.0-destruction*0.8);
   d=opSmoothSubtraction(hole,d,holeK);
 
-  // Destruction: additional voids punch through
   if(destruction>0.2){
     float d2_=destruction-0.2;
-    // Asymmetric voids at different positions — feels like structural failure
     float v1=sdSphere(p-vec3(0.9,0.3,-0.2),d2_*0.8);
     d=opSmoothSubtraction(v1,d,0.05);
     float v2=sdSphere(p-vec3(-0.4,0.7,0.6),d2_*0.6);
@@ -295,17 +354,21 @@ float scene(vec3 p){
     d=opSmoothSubtraction(v3,d,0.05);
   }
 
-  // Mouse attractor
   vec2 mp=(mouse-0.5)*3.0;
   vec3 attractor=vec3(mp.x,-mp.y,0.5);
   float influence=mActive*0.4/(1.0+length(p-attractor)*2.0);
   d-=influence;
 
+  // Crack lines between voronoi cells
+  if(shatter>0.01){
+    float crack=crackDist-shatter*0.08;
+    d=max(d,-crack);
+  }
+
   return d;
 }
 
 vec3 calcNormal(vec3 p){
-  // During destruction, epsilon gets larger — normals become noisy/wrong
   float eps=0.001+destruction*0.02;
   vec2 e=vec2(eps,0.0);
   return normalize(vec3(
@@ -341,12 +404,25 @@ void main(){
     float spec=pow(max(dot(reflect(-lightDir,n),-rd),0.0),32.0);
     float fres=pow(1.0-max(dot(n,-rd),0.0),3.0);
 
-    // During destruction, lighting breaks — specular goes wrong,
-    // diffuse inverts partially, like the surface normals are corrupted
     float brokenDiff=mix(diff,1.0-diff,destruction*0.6);
     float brokenSpec=spec*(1.0-destruction*0.7);
 
+    // SSS: measure thickness along light direction
+    // Thin geometry = light passes through = brighter
+    float sss=0.0;
+    float sssW=1.0;
+    for(int i=1;i<=3;i++){
+      float h=0.06+0.14*float(i);
+      float sd=scene(p+lightDir*h);
+      sss+=(h-max(sd,0.0))*sssW;
+      sssW*=0.5;
+    }
+    sss=clamp(sss*3.0,0.0,1.0);
+    // Subtle always; intensifies during shatter (thin broken pieces)
+    float sssStrength=0.12+shatter*0.6;
+
     col=vec3(0.04)*brokenDiff+vec3(0.6)*brokenSpec+vec3(0.15)*fres;
+    col+=vec3(sss*sssStrength);
 
     float edge=1.0-max(dot(n,-rd),0.0);
     col+=vec3(0.08)*pow(edge,2.0);
@@ -390,6 +466,7 @@ const mouseLoc=gl.getUniformLocation(prog,'mouse');
 const mActiveLoc=gl.getUniformLocation(prog,'mActive');
 const entropyLoc=gl.getUniformLocation(prog,'entropy');
 const destructionLoc=gl.getUniformLocation(prog,'destruction');
+const shatterLoc=gl.getUniformLocation(prog,'shatter');
 
 function draw(now){
   gl.uniform1f(tLoc,now*0.001);
@@ -398,6 +475,7 @@ function draw(now){
   gl.uniform1f(mActiveLoc,AlicePointer.active?1.0:0.0);
   gl.uniform1f(entropyLoc,AliceEntropy.state.level);
   gl.uniform1f(destructionLoc,AliceEntropy.destructionProgress());
+  gl.uniform1f(shatterLoc,AliceEntropy.shatter.value);
   gl.drawArrays(gl.TRIANGLE_STRIP,0,4);
   requestAnimationFrame(draw);
 }
