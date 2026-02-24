@@ -11,11 +11,10 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:'SF
 canvas#sdf{position:fixed;top:0;left:0;width:100%;height:100%;z-index:0}
 canvas#particles{position:fixed;top:0;left:0;width:100%;height:100%;z-index:1;pointer-events:none}
 canvas#ik{position:fixed;top:0;left:0;width:100%;height:100%;z-index:1;pointer-events:none}
-canvas#glitch{position:fixed;top:0;left:0;width:100%;height:100%;z-index:5;pointer-events:none;mix-blend-mode:screen}
 .overlay{position:fixed;top:0;left:0;width:100%;height:100%;z-index:2;display:flex;flex-direction:column;justify-content:center;align-items:center;pointer-events:none}
 .tagline{font-size:clamp(1.4rem,4vw,3.2rem);font-weight:700;letter-spacing:0.08em;text-align:center;text-shadow:0 0 40px rgba(255,255,255,0.3),0 0 80px rgba(255,255,255,0.1),0 0 2px rgba(255,255,255,0.8);opacity:0;animation:fadeIn 2s ease-out 0.5s forwards;line-height:1.4;padding:0 1rem}
 .tagline .char{display:inline-block;opacity:0;animation:charDecode 0.6s ease-out forwards;transition:color 0.1s,text-shadow 0.1s}
-.tagline .char.corrupted{color:#ff1744;text-shadow:0 0 10px rgba(255,23,68,0.8),2px 0 0 rgba(0,255,255,0.5),-2px 0 0 rgba(255,0,128,0.5)}
+.tagline .char.corrupted{opacity:0}
 .tagline br+.char,.tagline .char:first-child{}
 .subtitle{font-size:clamp(0.7rem,1.5vw,1rem);letter-spacing:0.25em;text-transform:uppercase;opacity:0;animation:fadeIn 2s ease-out 1.5s forwards;margin-top:2rem;color:rgba(255,255,255,0.5)}
 .badge{position:fixed;bottom:2rem;left:50%;transform:translateX(-50%);z-index:3;font-size:0.65rem;letter-spacing:0.3em;text-transform:uppercase;color:rgba(255,255,255,0.25);pointer-events:none;opacity:0;animation:fadeIn 2s ease-out 2.5s forwards}
@@ -33,7 +32,7 @@ canvas#glitch{position:fixed;top:0;left:0;width:100%;height:100%;z-index:5;point
 .sig{position:fixed;top:2rem;left:2rem;z-index:6;font-size:0.45rem;letter-spacing:0.1em;color:rgba(255,255,255,0.12);pointer-events:none;opacity:0;animation:fadeIn 2s ease-out 4s forwards;font-variant-numeric:tabular-nums;line-height:1.6}
 .codec-stat{position:fixed;bottom:8.5rem;left:50%;transform:translateX(-50%);z-index:3;font-size:0.5rem;letter-spacing:0.15em;color:rgba(255,255,255,0.12);pointer-events:none;opacity:0;animation:fadeIn 2s ease-out 3.5s forwards;font-variant-numeric:tabular-nums}
 .entropy-bar{position:fixed;top:0;left:0;width:100%;height:2px;z-index:10;pointer-events:none;opacity:0;animation:fadeIn 2s ease-out 4s forwards}
-.entropy-fill{height:100%;width:0%;background:linear-gradient(90deg,rgba(255,255,255,0.1),rgba(255,23,68,0.6),rgba(0,255,255,0.4));transition:width 0.3s}
+.entropy-fill{height:100%;width:0%;background:rgba(255,255,255,0.3);transition:width 0.3s}
 .overlay .tagline,.overlay .subtitle{transform:translateY(0)}
 </style>
 </head>
@@ -42,7 +41,6 @@ canvas#glitch{position:fixed;top:0;left:0;width:100%;height:100%;z-index:5;point
 <canvas id="sdf"></canvas>
 <canvas id="particles"></canvas>
 <canvas id="ik"></canvas>
-<canvas id="glitch"></canvas>
 
 <div class="overlay">
   <div class="tagline">Don't send data.<br>Send the law.</div>
@@ -55,7 +53,7 @@ canvas#glitch{position:fixed;top:0;left:0;width:100%;height:100%;z-index:5;point
 <div class="github"><a href="https://github.com/ext-sakamoro/ALICE-Eco-System" target="_blank" rel="noopener">github.com/ext-sakamoro/ALICE-Eco-System</a></div>
 <div class="sound-hint" id="soundToggle">click for sound</div>
 <div class="codec-stat" id="codecStat"></div>
-<div class="tech">ALICE-SDF &middot; ALICE-Physics &middot; ALICE-Synth &middot; ALICE-Text &middot; ALICE-View &middot; ALICE-Motion &middot; ALICE-Animation &middot; ALICE-Crypto &middot; ALICE-Codec &middot; ALICE-Kinematics &middot; ALICE-Entropy</div>
+<div class="tech">ALICE-SDF &middot; ALICE-Physics &middot; ALICE-Synth &middot; ALICE-Text &middot; ALICE-View &middot; ALICE-Motion &middot; ALICE-Animation &middot; ALICE-Crypto &middot; ALICE-Codec &middot; ALICE-Kinematics</div>
 <div class="badge">alicelaw.net &mdash; 52 crates &middot; 456 bridges &middot; zero compromise</div>
 
 <!-- ================================================================== -->
@@ -180,8 +178,8 @@ var AlicePointer=(function(){
 </script>
 
 <!-- ================================================================== -->
-<!-- ALICE-SDF: Raymarching with destruction — fracture, chromatic      -->
-<!-- aberration, scan lines, shockwave on click                        -->
+<!-- ALICE-SDF: Raymarching — structural failure during destruction     -->
+<!-- smooth union k collapses, normals invert, geometry tears apart     -->
 <!-- ================================================================== -->
 <script>
 (function(){
@@ -208,15 +206,8 @@ uniform vec2 mouse;
 uniform float mActive;
 uniform float entropy;
 uniform float destruction;
-uniform float shockwave;
-uniform vec2 shockCenter;
 
 float sdSphere(vec3 p,float s){return length(p)-s;}
-
-float sdBox(vec3 p,vec3 b){
-  vec3 q=abs(p)-b;
-  return length(max(q,0.0))+min(max(q.x,max(q.y,q.z)),0.0);
-}
 
 float sdTorus(vec3 p,vec2 t){
   vec2 q=vec2(length(p.xz)-t.x,p.y);
@@ -228,49 +219,41 @@ float sdOctahedron(vec3 p,float s){
   return (p.x+p.y+p.z-s)*0.57735027;
 }
 
+// smooth union — k parameter is the key. when k→0, union breaks apart
 float opSmoothUnion(float d1,float d2,float k){
+  k=max(k,0.001);
   float h=clamp(0.5+0.5*(d2-d1)/k,0.0,1.0);
   return mix(d2,d1,h)-k*h*(1.0-h);
 }
 
 float opSmoothSubtraction(float d1,float d2,float k){
+  k=max(k,0.001);
   float h=clamp(0.5-0.5*(d2+d1)/k,0.0,1.0);
   return mix(d2,-d1,h)+k*h*(1.0-h);
 }
 
 mat2 rot(float a){float c=cos(a),s=sin(a);return mat2(c,-s,s,c);}
 
-// Pseudo-random hash for fracture displacement
 float hash(vec3 p){
   p=fract(p*vec3(443.897,441.423,437.195));
   p+=dot(p,p.yzx+19.19);
   return fract((p.x+p.y)*p.z);
 }
 
-// Voronoi-like fracture displacement
-vec3 fractureDisplace(vec3 p,float strength){
-  vec3 cellId=floor(p*2.0);
-  float h=hash(cellId);
-  vec3 dir=normalize(vec3(hash(cellId+1.0)-0.5,hash(cellId+2.0)-0.5,hash(cellId+3.0)-0.5));
-  float phase=h*6.283+t*3.0;
-  return dir*sin(phase)*strength*h;
-}
-
 float scene(vec3 p){
   float time=t*0.4;
-
-  // Destruction: fracture displacement
-  float fractureStr=destruction*1.5;
-  if(fractureStr>0.01){
-    p+=fractureDisplace(p,fractureStr);
-  }
 
   p.xz*=rot(time*0.3);
   p.yz*=rot(time*0.2);
 
-  // Entropy agitation: geometry vibrates as entropy rises
-  float agitation=entropy*0.15;
-  p+=vec3(sin(t*7.0+p.y*3.0),cos(t*5.3+p.z*2.7),sin(t*6.1+p.x*3.3))*agitation;
+  // Destruction: space itself warps asymmetrically
+  if(destruction>0.01){
+    // Non-uniform shear — geometry loses its coherence
+    float shear=destruction*0.8;
+    p.x+=sin(p.y*2.1+t*1.7)*shear;
+    p.z+=cos(p.x*1.8+t*2.3)*shear*0.7;
+    p.y+=sin(p.z*2.5+t*1.3)*shear*0.5;
+  }
 
   float morph=sin(time*0.7)*0.5+0.5;
   float d1=mix(sdSphere(p,1.2),sdOctahedron(p,1.5),morph);
@@ -285,40 +268,46 @@ float scene(vec3 p){
   tp2.xz*=rot(time*0.3+1.57);
   float d3=sdTorus(tp2,vec2(1.8,0.08));
 
-  // Third torus visible during high entropy
-  vec3 tp3=p;
-  tp3.xy*=rot(time*1.1);
-  tp3.yz*=rot(time*0.7+2.09);
-  float d4=sdTorus(tp3,vec2(1.4+entropy*0.6,0.05+entropy*0.04));
+  // smooth union k degrades: geometry separates as k→0
+  // normal state: k=0.3 (smooth blend)
+  // destruction: k→0.01 (hard separation, pieces drift apart)
+  float k=0.3*(1.0-destruction*0.95);
 
-  float d=opSmoothUnion(d1,d2,0.3);
-  d=opSmoothUnion(d,d3,0.3);
-  d=opSmoothUnion(d,d4,0.3+entropy*0.2);
+  float d=opSmoothUnion(d1,d2,k);
+  d=opSmoothUnion(d,d3,k);
 
-  // Breathing hole grows during destruction
-  float breath=sin(time*1.2)*0.3+0.5+destruction*0.8;
-  float hole=sdSphere(p,breath);
-  d=opSmoothSubtraction(hole,d,0.2+destruction*0.3);
+  // Breathing hole — during destruction it tears open wide
+  float breath=sin(time*1.2)*0.3+0.5;
+  float holeSize=breath+destruction*1.2;
+  float hole=sdSphere(p,holeSize);
+  float holeK=0.2*(1.0-destruction*0.8);
+  d=opSmoothSubtraction(hole,d,holeK);
 
-  // Additional destruction holes — geometry tears apart
-  if(destruction>0.1){
-    float h2=sdSphere(p-vec3(sin(t*2.0)*0.8,cos(t*1.7)*0.6,0),destruction*0.6);
-    d=opSmoothSubtraction(h2,d,0.15);
-    float h3=sdSphere(p-vec3(0,sin(t*2.3)*0.7,cos(t*1.9)*0.8),destruction*0.5);
-    d=opSmoothSubtraction(h3,d,0.15);
+  // Destruction: additional voids punch through
+  if(destruction>0.2){
+    float d2_=destruction-0.2;
+    // Asymmetric voids at different positions — feels like structural failure
+    float v1=sdSphere(p-vec3(0.9,0.3,-0.2),d2_*0.8);
+    d=opSmoothSubtraction(v1,d,0.05);
+    float v2=sdSphere(p-vec3(-0.4,0.7,0.6),d2_*0.6);
+    d=opSmoothSubtraction(v2,d,0.05);
+    float v3=sdSphere(p-vec3(0.2,-0.8,0.4),d2_*0.7);
+    d=opSmoothSubtraction(v3,d,0.05);
   }
 
-  // Mouse attractor (stronger during high entropy)
+  // Mouse attractor
   vec2 mp=(mouse-0.5)*3.0;
   vec3 attractor=vec3(mp.x,-mp.y,0.5);
-  float influence=mActive*(0.4+entropy*0.6)/(1.0+length(p-attractor)*2.0);
+  float influence=mActive*0.4/(1.0+length(p-attractor)*2.0);
   d-=influence;
 
   return d;
 }
 
 vec3 calcNormal(vec3 p){
-  vec2 e=vec2(0.001,0.0);
+  // During destruction, epsilon gets larger — normals become noisy/wrong
+  float eps=0.001+destruction*0.02;
+  vec2 e=vec2(eps,0.0);
   return normalize(vec3(
     scene(p+e.xyy)-scene(p-e.xyy),
     scene(p+e.yxy)-scene(p-e.yxy),
@@ -328,25 +317,6 @@ vec3 calcNormal(vec3 p){
 
 void main(){
   vec2 uv=(gl_FragCoord.xy-0.5*r)/min(r.x,r.y);
-
-  // Shockwave distortion from clicks
-  if(shockwave>0.01){
-    vec2 suv=(gl_FragCoord.xy/r-shockCenter)*vec2(r.x/r.y,1.0);
-    float sd=length(suv);
-    float ring=(1.0-shockwave)*1.5;
-    float band=smoothstep(ring-0.15,ring,sd)*smoothstep(ring+0.15,ring,sd);
-    uv+=normalize(suv)*band*shockwave*0.08;
-  }
-
-  // Scan line distortion during destruction
-  if(destruction>0.1){
-    float scanY=gl_FragCoord.y/r.y;
-    float scanLine=step(0.97,fract(scanY*200.0+t*50.0))*destruction;
-    uv.x+=scanLine*0.02*(sin(t*100.0+scanY*10.0));
-    // Horizontal tear
-    float tear=step(0.99,fract(sin(floor(scanY*30.0+t*8.0)*43758.5453)))*destruction;
-    uv.x+=tear*0.05*sign(sin(t*73.0));
-  }
 
   vec3 ro=vec3(0,0,4.5);
   vec3 rd=normalize(vec3(uv,-1.5));
@@ -371,24 +341,15 @@ void main(){
     float spec=pow(max(dot(reflect(-lightDir,n),-rd),0.0),32.0);
     float fres=pow(1.0-max(dot(n,-rd),0.0),3.0);
 
-    col=vec3(0.04)*diff+vec3(0.6)*spec+vec3(0.15)*fres;
+    // During destruction, lighting breaks — specular goes wrong,
+    // diffuse inverts partially, like the surface normals are corrupted
+    float brokenDiff=mix(diff,1.0-diff,destruction*0.6);
+    float brokenSpec=spec*(1.0-destruction*0.7);
+
+    col=vec3(0.04)*brokenDiff+vec3(0.6)*brokenSpec+vec3(0.15)*fres;
 
     float edge=1.0-max(dot(n,-rd),0.0);
     col+=vec3(0.08)*pow(edge,2.0);
-
-    // Destruction: hot edges glow red/cyan
-    if(destruction>0.05){
-      float hotEdge=pow(edge,3.0)*destruction;
-      col+=vec3(0.8,0.05,0.1)*hotEdge*1.5;
-      col+=vec3(0.0,0.6,0.7)*hotEdge*0.4*sin(t*10.0+p.y*5.0);
-    }
-
-    // Entropy rising: subtle color bleed
-    if(entropy>0.3){
-      float eb=(entropy-0.3)*1.43;
-      col.r+=fres*eb*0.15;
-      col.b+=edge*eb*0.08;
-    }
 
     float fog=exp(-totalDist*0.15);
     col*=fog;
@@ -397,21 +358,7 @@ void main(){
   float glow=exp(-totalDist*0.5)*0.03;
   col+=vec3(glow);
 
-  // Chromatic aberration during destruction
-  if(destruction>0.05){
-    float caStr=destruction*0.012;
-    vec2 caOff=uv*caStr;
-    // Fake CA by shifting color channels
-    col.r*=1.0+caStr*5.0*sin(uv.y*50.0+t*20.0);
-    col.b*=1.0+caStr*3.0*cos(uv.x*40.0-t*15.0);
-  }
-
-  // Gamma
   col=pow(col,vec3(0.9));
-
-  // Noise grain during high entropy/destruction
-  float grain=(fract(sin(dot(gl_FragCoord.xy,vec2(12.9898,78.233))+t)*43758.5453)-0.5);
-  col+=grain*(0.02+destruction*0.06+entropy*0.03);
 
   gl_FragColor=vec4(col,1);
 }
@@ -443,30 +390,14 @@ const mouseLoc=gl.getUniformLocation(prog,'mouse');
 const mActiveLoc=gl.getUniformLocation(prog,'mActive');
 const entropyLoc=gl.getUniformLocation(prog,'entropy');
 const destructionLoc=gl.getUniformLocation(prog,'destruction');
-const shockwaveLoc=gl.getUniformLocation(prog,'shockwave');
-const shockCenterLoc=gl.getUniformLocation(prog,'shockCenter');
-
-var shockwave=0;
-var shockCx=0.5,shockCy=0.5;
-
-window.addEventListener('click',function(){
-  shockwave=1.0;
-  shockCx=AlicePointer.x;
-  shockCy=1.0-AlicePointer.y;
-});
 
 function draw(now){
-  shockwave*=0.96;
-  if(shockwave<0.01)shockwave=0;
-
   gl.uniform1f(tLoc,now*0.001);
   gl.uniform2f(rLoc,canvas.width,canvas.height);
   gl.uniform2f(mouseLoc,AlicePointer.x,AlicePointer.y);
   gl.uniform1f(mActiveLoc,AlicePointer.active?1.0:0.0);
   gl.uniform1f(entropyLoc,AliceEntropy.state.level);
   gl.uniform1f(destructionLoc,AliceEntropy.destructionProgress());
-  gl.uniform1f(shockwaveLoc,shockwave);
-  gl.uniform2f(shockCenterLoc,shockCx,shockCy);
   gl.drawArrays(gl.TRIANGLE_STRIP,0,4);
   requestAnimationFrame(draw);
 }
@@ -517,7 +448,6 @@ function spawn(cx_,cy_,isViolent){
     life:1,
     decay:isViolent?0.008+Math.random()*0.012:0.001+Math.random()*0.003,
     size:isViolent?2+Math.random()*4:1+Math.random()*2,
-    hot:isViolent?1:0,
   };
 }
 
@@ -577,7 +507,6 @@ function step(){
     if(p.y>h){p.y=h;p.vy=-Math.abs(p.vy)*BOUNCE;}
 
     p.life-=p.decay;
-    p.hot*=0.98;
     if(p.life<=0){
       const np=spawn(null,null,destroying);
       np.px=np.x;np.py=np.y;
@@ -594,26 +523,17 @@ function render(){
     const alpha=p.life*0.5;
     if(alpha<0.01)continue;
 
-    // Color: white normally, red/cyan bleed during hot state
-    var r=255,g=255,b=255;
-    if(p.hot>0.1){
-      r=255;g=Math.round(255*(1-p.hot*0.8));b=Math.round(255*(1-p.hot*0.7));
-    }
-
     ctx.beginPath();
     ctx.arc(p.x,p.y,p.size,0,Math.PI*2);
-    ctx.fillStyle='rgba('+r+','+g+','+b+','+alpha+')';
+    ctx.fillStyle='rgba(255,255,255,'+alpha+')';
     ctx.fill();
 
-    // Motion trail — longer during destruction
-    var trailThreshold=AliceEntropy.isDestroying()?0.05:0.3;
-    if(p.life>trailThreshold){
+    if(p.life>0.1){
       ctx.beginPath();
       ctx.moveTo(p.x,p.y);
       ctx.lineTo(p.px,p.py);
-      var trailR=r,trailG=Math.max(0,g-50),trailB=Math.max(0,b-80);
-      ctx.strokeStyle='rgba('+trailR+','+trailG+','+trailB+','+alpha*0.4+')';
-      ctx.lineWidth=p.size*0.7;
+      ctx.strokeStyle='rgba(255,255,255,'+alpha*0.3+')';
+      ctx.lineWidth=p.size*0.5;
       ctx.stroke();
     }
   }
@@ -631,7 +551,6 @@ function burst(cx,cy,count,violent){
       life:violent?0.7+Math.random()*0.3:0.5+Math.random()*0.5,
       decay:violent?0.006+Math.random()*0.01:0.005+Math.random()*0.008,
       size:violent?2.5+Math.random()*4:1.5+Math.random()*2.5,
-      hot:violent?0.8+Math.random()*0.2:0,
     };
     particles.push(p);
   }
@@ -668,8 +587,7 @@ requestAnimationFrame(loop);
 <!-- ================================================================== -->
 <script>
 (function(){
-const CHARS='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789@#$%&*!?<>{}[]=/\\|~^';
-const GLITCH_CHARS='\u2588\u2593\u2592\u2591\u2580\u2584\u258C\u2590\u25A0\u25A1\u2573\u2571\u2572';
+const CHARS='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789@#$%&*';
 const tagline=document.querySelector('.tagline');
 if(!tagline)return;
 
@@ -733,14 +651,11 @@ function corruptionTick(){
     if(finalChar===' ')continue;
 
     if(!corruptedSet.has(i)&&Math.random()<corruptChance){
-      // Corrupt this character
       corruptedSet.add(i);
+      // Just disappear — no flashy replacement
       el.classList.add('corrupted');
-      var glitchSrc=destroying?GLITCH_CHARS:CHARS;
-      el.textContent=glitchSrc[Math.floor(Math.random()*glitchSrc.length)];
 
-      // Schedule repair
-      var repairDelay=destroying?800+Math.random()*1500:200+Math.random()*600;
+      var repairDelay=destroying?600+Math.random()*1200:150+Math.random()*500;
       (function(idx,element,fc){
         setTimeout(function(){
           element.textContent=fc;
@@ -751,19 +666,18 @@ function corruptionTick(){
     }
   }
 
-  // Full destruction event: corrupt everything, then rebuild
-  if(AliceEntropy.state.phase==='destruction'&&corruptedSet.size<charEls.length*0.5){
+  // Full destruction: chars silently vanish, then return
+  if(AliceEntropy.state.phase==='destruction'&&corruptedSet.size<charEls.length*0.6){
     for(var j=0;j<charEls.length;j++){
-      if(charEls[j].dataset.final!==' '&&!corruptedSet.has(j)&&Math.random()<0.3){
+      if(charEls[j].dataset.final!==' '&&!corruptedSet.has(j)&&Math.random()<0.25){
         corruptedSet.add(j);
         charEls[j].classList.add('corrupted');
-        charEls[j].textContent=GLITCH_CHARS[Math.floor(Math.random()*GLITCH_CHARS.length)];
         (function(idx,element,fc){
           setTimeout(function(){
             element.textContent=fc;
             element.classList.remove('corrupted');
             corruptedSet.delete(idx);
-          },1500+Math.random()*2000);
+          },1000+Math.random()*2500);
         })(j,charEls[j],charEls[j].dataset.final);
       }
     }
@@ -1306,27 +1220,22 @@ function render(now){
 
     var joints=chains[c].joints;
 
-    // Line color: white → red during destruction
-    var lineAlpha=0.08+entropy*0.12+intensity*0.2;
-    var lineR=destroying?255:255;
-    var lineG=destroying?Math.round(255*(1-intensity*0.7)):255;
-    var lineB=destroying?Math.round(255*(1-intensity*0.6)):255;
+    var lineAlpha=0.08+entropy*0.08;
 
     ctx.beginPath();
     ctx.moveTo(joints[0].x,joints[0].y);
     for(var i=1;i<joints.length;i++){
       ctx.lineTo(joints[i].x,joints[i].y);
     }
-    ctx.strokeStyle='rgba('+lineR+','+lineG+','+lineB+','+lineAlpha+')';
-    ctx.lineWidth=1.5+intensity*2;
+    ctx.strokeStyle='rgba(255,255,255,'+lineAlpha+')';
+    ctx.lineWidth=1.5;
     ctx.stroke();
 
     for(var i=0;i<joints.length;i++){
-      var alpha=0.04+0.12*(i/joints.length)+intensity*0.15;
-      var dotSize=1.5+2*(i/joints.length)+intensity*2;
+      var alpha=0.04+0.1*(i/joints.length);
       ctx.beginPath();
-      ctx.arc(joints[i].x,joints[i].y,dotSize,0,Math.PI*2);
-      ctx.fillStyle='rgba('+lineR+','+lineG+','+lineB+','+alpha+')';
+      ctx.arc(joints[i].x,joints[i].y,1.5+1.5*(i/joints.length),0,Math.PI*2);
+      ctx.fillStyle='rgba(255,255,255,'+alpha+')';
       ctx.fill();
     }
   }
@@ -1336,93 +1245,6 @@ requestAnimationFrame(render);
 })();
 </script>
 
-<!-- ================================================================== -->
-<!-- ALICE-Glitch: Full-screen glitch overlay canvas                     -->
-<!-- Scan lines, horizontal tears, static noise during destruction      -->
-<!-- ================================================================== -->
-<script>
-(function(){
-var canvas=document.getElementById('glitch');
-var ctx=canvas.getContext('2d');
-
-function resize(){
-  var dpr=Math.min(window.devicePixelRatio,2);
-  canvas.width=window.innerWidth*dpr;
-  canvas.height=window.innerHeight*dpr;
-  canvas.style.width=window.innerWidth+'px';
-  canvas.style.height=window.innerHeight+'px';
-}
-resize();
-window.addEventListener('resize',resize);
-
-function render(now){
-  ctx.clearRect(0,0,canvas.width,canvas.height);
-  var entropy=AliceEntropy.state.level;
-  var destroying=AliceEntropy.isDestroying();
-  var intensity=AliceEntropy.destructionProgress();
-
-  if(entropy<0.2&&!destroying){
-    requestAnimationFrame(render);
-    return;
-  }
-
-  var w=canvas.width,h=canvas.height;
-
-  // Scan lines — thin horizontal lines that sweep
-  if(entropy>0.3||destroying){
-    var scanCount=destroying?Math.floor(8+intensity*20):Math.floor((entropy-0.3)*10);
-    ctx.globalAlpha=destroying?0.15+intensity*0.2:entropy*0.05;
-    for(var i=0;i<scanCount;i++){
-      var y=Math.random()*h;
-      var thickness=1+Math.random()*(destroying?4:2);
-      ctx.fillStyle=Math.random()>0.7?'rgba(255,23,68,0.4)':'rgba(255,255,255,0.3)';
-      ctx.fillRect(0,y,w,thickness);
-    }
-  }
-
-  // Horizontal tear blocks — displaced rectangles
-  if(destroying&&intensity>0.3){
-    var tearCount=Math.floor(intensity*6);
-    for(var i=0;i<tearCount;i++){
-      var ty=Math.random()*h;
-      var th=5+Math.random()*20*intensity;
-      var tx=(Math.random()-0.5)*w*0.1*intensity;
-      ctx.globalAlpha=0.04+intensity*0.08;
-      ctx.fillStyle=Math.random()>0.5?'rgba(0,255,255,0.2)':'rgba(255,0,80,0.15)';
-      ctx.fillRect(tx,ty,w,th);
-    }
-  }
-
-  // Static noise grain — scattered pixels
-  if(entropy>0.5||destroying){
-    var noiseAmount=destroying?2000*intensity:Math.floor((entropy-0.5)*800);
-    ctx.globalAlpha=destroying?0.3*intensity:0.1;
-    for(var i=0;i<noiseAmount;i++){
-      var nx=Math.random()*w;
-      var ny=Math.random()*h;
-      var ns=1+Math.random()*2;
-      ctx.fillStyle=Math.random()>0.8?'rgba(255,23,68,0.5)':'rgba(255,255,255,0.4)';
-      ctx.fillRect(nx,ny,ns,ns);
-    }
-  }
-
-  // Large glitch block during peak destruction
-  if(destroying&&intensity>0.6&&Math.random()>0.7){
-    ctx.globalAlpha=0.06;
-    var bx=Math.random()*w*0.5;
-    var by=Math.random()*h;
-    var bw=w*0.3+Math.random()*w*0.4;
-    var bh=10+Math.random()*60;
-    ctx.fillStyle=Math.random()>0.5?'rgba(0,255,255,0.3)':'rgba(255,0,60,0.2)';
-    ctx.fillRect(bx,by,bw,bh);
-  }
-
-  ctx.globalAlpha=1;
-  requestAnimationFrame(render);
-}
-requestAnimationFrame(render);
-})();
-</script>
 
 </body>
 </html>
