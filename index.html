@@ -71,12 +71,12 @@ var AliceEntropy=(function(){
     cycleCount:0       // total destruction cycles
   };
 
-  var RISE_RATE=0.016;
+  var RISE_RATE=0.008;
   var DECAY_RATE=0.015;
   var CLICK_BOOST=0.12;
   var THRESHOLD=0.85;
-  var DESTRUCTION_DURATION=1100;
-  var REBIRTH_DURATION=900;
+  var DESTRUCTION_DURATION=2200;
+  var REBIRTH_DURATION=1800;
 
   var fillEl=document.getElementById('entropyFill');
 
@@ -123,7 +123,7 @@ var AliceEntropy=(function(){
 
   // Shatter system — independent from entropy, every 3-4 min
   var shatter={value:0,phase:'idle',startTime:0};
-  var SHATTER_INTERVAL=22500+Math.random()*22500; // first: 22.5-45s
+  var SHATTER_INTERVAL=45000+Math.random()*45000; // first: 45-90s
   var SHATTER_BREAK=400;   // instant break (ms)
   var SHATTER_DRIFT=3000;  // pieces float
   var SHATTER_REFORM=4000; // slow reassembly
@@ -135,7 +135,7 @@ var AliceEntropy=(function(){
         shatter.phase='break';
         shatter.startTime=now;
         lastShatterCheck=now;
-        SHATTER_INTERVAL=90000+Math.random()*30000;
+        SHATTER_INTERVAL=180000+Math.random()*60000;
       }
     }else if(shatter.phase==='break'){
       var t=Math.min((now-shatter.startTime)/SHATTER_BREAK,1.0);
@@ -161,124 +161,6 @@ var AliceEntropy=(function(){
     destructionProgress:function(){return state.intensity;},
     updateShatter:updateShatter
   };
-})();
-</script>
-
-<!-- ================================================================== -->
-<!-- ALICE-Meteor: Mass-driven meteor with atmospheric drag & SDF CCD   -->
-<!-- F_drag = 0.5 * rho * v^2 * Cd * A — sphere Cd=0.47               -->
-<!-- ================================================================== -->
-<script>
-var AliceMeteor=(function(){
-  var RHO=1.225;
-  var CD=0.47;
-  var RADIUS=0.35;
-  var A=3.14159*RADIUS*RADIUS;
-  var MASS=800.0;
-  var GRAVITY=9.81;
-  var BOUNDING_R=2.0;
-  var SPAWN_COOLDOWN=8000;
-
-  var state={
-    active:false,
-    pos:[0,0,0],
-    vel:[0,0,0],
-    radius:RADIUS,
-    speed:0,
-    lastSpawn:0,
-    impacted:false
-  };
-
-  function spawn(now){
-    var angle=Math.random()*6.2832;
-    var dist=6+Math.random()*4;
-    var height=8+Math.random()*4;
-    state.pos[0]=Math.cos(angle)*dist;
-    state.pos[1]=height;
-    state.pos[2]=Math.sin(angle)*dist;
-    var speed=15+Math.random()*10;
-    var dx=-state.pos[0];
-    var dy=-state.pos[1];
-    var dz=-state.pos[2];
-    var len=Math.sqrt(dx*dx+dy*dy+dz*dz)||1;
-    state.vel[0]=dx/len*speed;
-    state.vel[1]=dy/len*speed;
-    state.vel[2]=dz/len*speed;
-    state.active=true;
-    state.impacted=false;
-    state.lastSpawn=now;
-  }
-
-  function update(dt,now){
-    if(!state.active){
-      if(now-state.lastSpawn>SPAWN_COOLDOWN
-        &&AliceEntropy.state.level>0.7
-        &&AliceEntropy.state.phase==='calm'){
-        spawn(now);
-      }
-      return;
-    }
-    var vx=state.vel[0],vy=state.vel[1],vz=state.vel[2];
-    var v=Math.sqrt(vx*vx+vy*vy+vz*vz)||0.001;
-    state.speed=v;
-    var dragF=0.5*RHO*v*v*CD*A;
-    var dragAcc=dragF/MASS;
-    var ax=-vx/v*dragAcc;
-    var ay=-vy/v*dragAcc-GRAVITY;
-    var az=-vz/v*dragAcc;
-    state.vel[0]+=ax*dt;
-    state.vel[1]+=ay*dt;
-    state.vel[2]+=az*dt;
-    state.pos[0]+=state.vel[0]*dt;
-    state.pos[1]+=state.vel[1]*dt;
-    state.pos[2]+=state.vel[2]*dt;
-    var px=state.pos[0],py=state.pos[1],pz=state.pos[2];
-    var distCenter=Math.sqrt(px*px+py*py+pz*pz);
-    if(distCenter<BOUNDING_R+RADIUS&&!state.impacted){
-      state.impacted=true;
-      state.active=false;
-      AliceEntropy.state.level=1.0;
-      AliceEntropy.addClick();
-      AliceEntropy.addClick();
-      AliceEntropy.addClick();
-      if(typeof audioCtx!=='undefined'&&audioCtx&&audioCtx._noiseBurst){
-        audioCtx._noiseBurst(1.5,0.6);
-      }
-    }
-    if(py<-15||distCenter>30){
-      state.active=false;
-    }
-  }
-
-  return{state:state,update:update,spawn:spawn};
-})();
-</script>
-
-<!-- ================================================================== -->
-<!-- ALICE-PathOmega: Spacetime elasticity — light speed throttling     -->
-<!-- Frame time EMA drives cScale: 16.6ms target = cScale 1.0          -->
-<!-- ================================================================== -->
-<script>
-var AlicePathOmega=(function(){
-  var TARGET_MS=16.6;
-  var state={
-    cScale:1.0,
-    frameTimeEMA:16.6,
-    lastTime:0
-  };
-
-  function update(now){
-    if(state.lastTime>0){
-      var dt=now-state.lastTime;
-      dt=Math.min(dt,100);
-      state.frameTimeEMA=state.frameTimeEMA*0.9+dt*0.1;
-      var raw=TARGET_MS/Math.max(state.frameTimeEMA,1);
-      state.cScale=state.cScale*0.9+Math.max(0.15,Math.min(1.0,raw))*0.1;
-    }
-    state.lastTime=now;
-  }
-
-  return{state:state,update:update};
 })();
 </script>
 
@@ -360,11 +242,6 @@ uniform float mActive;
 uniform float entropy;
 uniform float destruction;
 uniform float shatter;
-uniform vec3 uMeteorPos;
-uniform float uMeteorRadius;
-uniform float uMeteorActive;
-uniform float uMeteorSpeed;
-uniform float uCScale;
 
 float sdSphere(vec3 p,float s){return length(p)-s;}
 
@@ -411,33 +288,19 @@ vec4 gridShatter(vec3 p){
 }
 
 float scene(vec3 p){
-  float time=t*0.4*uCScale;
-  vec3 wp=p;
+  float time=t*0.4;
 
   p.xz*=rot(time*0.3);
   p.yz*=rot(time*0.2);
 
-  float morph=sin(time*0.7)*0.5+0.5;
-
-  // Grid shatter + stress fracture (掟 II: 応力破壊)
-  // Fracture propagates from curvature maxima via wave equation,
-  // not uniform grid displacement
+  // Grid shatter: O(1) cell lookup, each cell displaced outward
   float crackDist=10.0;
   if(shatter>0.01){
-    // Stress concentration: high near SDF surface + geometric edges
-    float quickD=mix(sdSphere(p,1.2),sdOctahedron(p,1.5),morph);
-    float surfaceStress=exp(-abs(quickD)*5.0);
-    vec3 ap=abs(p);
-    float edgeStress=exp(-min(min(abs(ap.x-ap.y),abs(ap.y-ap.z)),abs(ap.x-ap.z))*8.0)*morph;
-    float stress=max(surfaceStress,edgeStress);
     vec4 gs=gridShatter(p*2.0);
     crackDist=gs.w;
     vec3 cellDir=normalize(gs.xyz-0.5);
-    // Wave propagation: shatter front expands from stress maxima
-    float waveFront=smoothstep(0.0,0.4,shatter*3.0-stress*0.8);
-    float fracAmp=mix(1.0,2.5,stress);
-    p+=cellDir*shatter*1.2*fracAmp*waveFront;
-    float ca=(gs.x+gs.y)*6.28*shatter*0.3*fracAmp;
+    p+=cellDir*shatter*1.2;
+    float ca=(gs.x+gs.y)*6.28*shatter*0.3;
     p.xy*=rot(ca);
     p.yz*=rot(ca*0.7);
   }
@@ -449,6 +312,8 @@ float scene(vec3 p){
     p.z+=cos(p.x*1.8+t*2.3)*sh*0.7;
     p.y+=sin(p.z*2.5+t*1.3)*sh*0.5;
   }
+
+  float morph=sin(time*0.7)*0.5+0.5;
   float d1=mix(sdSphere(p,1.2),sdOctahedron(p,1.5),morph);
 
   vec3 tp=p;
@@ -493,125 +358,17 @@ float scene(vec3 p){
     d=max(d,-crack);
   }
 
-  // Meteor SDF — branchless gate (Law Z: no if/else in SDF)
-  float dM=length(wp-uMeteorPos)-uMeteorRadius;
-  d=min(d,mix(1e10,dM,step(0.5,uMeteorActive)));
-
   return d;
 }
 
-// Law N: 4-tap adaptive tetrahedral normal (33% fewer scene() calls)
-vec3 calcN(vec3 p, float dist){
-  float e=max(0.0002,dist*0.0003+destruction*0.005);
-  vec2 k=vec2(e,-e);
-  return normalize(
-    k.xyy*scene(p+k.xyy)+k.yyx*scene(p+k.yyx)+
-    k.yxy*scene(p+k.yxy)+k.xxx*scene(p+k.xxx));
-}
-
-// Meteor glow — adiabatic compression -> blackbody radiation (Law 3)
-// T = T0 * (1 + (gamma-1)/2 * M^2), branchless gate on uMeteorActive
-vec3 meteorGlow(vec3 ro, vec3 rd, float tHit){
-  float gate=step(0.5,uMeteorActive);
-  if(gate<0.5) return vec3(0.0);
-  // closest approach of ray to meteor center
-  vec3 oc=ro-uMeteorPos;
-  float b=dot(oc,rd);
-  float det=b*b-dot(oc,oc)+uMeteorRadius*uMeteorRadius*9.0;
-  float hitM=step(0.0,det);
-  float dist=max(length(oc+rd*max(-b,0.0))-uMeteorRadius,0.001);
-  // adiabatic compression temperature
-  float mach=uMeteorSpeed*0.00292; // rcp(343)
-  float tempK=300.0*(1.0+0.2*mach*mach);
-  tempK=min(tempK,12000.0);
-  // blackbody color (Planck polynomial approx)
-  float tt=tempK*0.01;
-  float rr=mix(1.0,clamp(1.293*inversesqrt(max(tt-55.0,0.01))-0.16,0.0,1.0),step(66.0,tt));
-  float gg=mix(clamp(0.39*log(max(tt,1.0))-0.63,0.0,1.0),clamp(1.13*inversesqrt(max(tt-50.0,0.01))-0.15,0.0,1.0),step(66.0,tt));
-  float bb=mix(mix(0.0,clamp(0.543*log(max(tt-10.0,1.0))-1.196,0.0,1.0),step(19.0,tt)),1.0,step(66.0,tt));
-  vec3 glow=vec3(rr,gg,bb)*exp(-dist*1.5)*max(tempK-800.0,0.0)*0.0003;
-  // plasma sheath streaks
-  float streak=exp(-dist*8.0)*0.3;
-  glow+=vec3(0.3,0.5,1.0)*streak;
-  return glow*gate;
-}
-
-// Physical rain with SDF occlusion (Law 5: rain never penetrates geometry)
-// 8 streaks, hash-based positions, SDF upward trace for roof detection
-vec3 rainLayer(vec3 ro, vec3 rd, float tHit){
-  float rainIntensity=entropy*0.7+destruction*0.3;
-  if(rainIntensity<0.05) return vec3(0.0);
-  vec3 acc=vec3(0.0);
-  float timeR=t*uCScale;
-  for(int i=0;i<8;i++){
-    float seed=float(i)*13.71;
-    vec2 sxz=vec2(
-      fract(sin(seed*127.1)*43758.5)*8.0-4.0,
-      fract(sin(seed*269.5)*43758.5)*8.0-4.0);
-    // closest point on ray to streak line
-    vec2 dxz=rd.xz;
-    vec2 diff=ro.xz-sxz;
-    float denom=dot(dxz,dxz)+0.001;
-    float s=clamp(-dot(diff,dxz)*(1.0/(denom)),0.0,min(tHit,12.0));
-    vec3 cp=ro+rd*s;
-    float distStreak=length(cp.xz-sxz);
-    // SDF occlusion: trace upward from point (Law 5)
-    float occluded=0.0;
-    vec3 probe=cp;
-    for(int j=0;j<4;j++){
-      probe.y+=0.6;
-      float sd=scene(probe);
-      occluded+=step(sd,0.15)*0.35;
-    }
-    float exposed=clamp(1.0-occluded,0.0,1.0);
-    // animated fall
-    float dropY=fract(-timeR*2.0+fract(sin(seed*183.3)*43758.5));
-    float yMatch=exp(-abs(fract(cp.y*0.5+0.5)-dropY)*20.0);
-    float brightness=exp(-distStreak*30.0)*exposed*yMatch*0.08*rainIntensity;
-    acc+=vec3(0.5,0.6,0.8)*brightness;
-  }
-  return acc;
-}
-
-// 掟 III: Occlusion flux — unified SDF-density shadow model
-// Spatial density integration replaces absent shadow computation
-float occlusionFlux(vec3 p, vec3 n){
-  float occ=0.0;
-  float sca=1.0;
-  for(int i=0;i<5;i++){
-    float h=0.02+0.12*float(i);
-    float d=scene(p+n*h);
-    occ+=(h-d)*sca;
-    sca*=0.85;
-  }
-  return clamp(1.0-3.0*occ,0.0,1.0);
-}
-
-// 掟 I: Energy flux with SDF CCD — collides with ALL geometry
-// Procedural streaks that never penetrate any SDF surface
-vec3 energyFlux(vec3 ro, vec3 rd, float tHit){
-  vec3 acc=vec3(0.0);
-  for(int i=0;i<3;i++){
-    float seed=float(i)*7.31+floor(t*uCScale*0.3);
-    vec2 sxz=vec2(
-      fract(sin(seed*127.1)*43758.5)*6.0-3.0,
-      fract(sin(seed*311.7)*43758.5)*6.0-3.0);
-    vec2 dxz=rd.xz;
-    vec2 diff=ro.xz-sxz;
-    float denom=dot(dxz,dxz)+0.001;
-    float s=clamp(-dot(diff,dxz)*(1.0/denom),0.0,min(tHit,15.0));
-    vec3 cp=ro+rd*s;
-    float distStreak=length(cp.xz-sxz);
-    // SDF collision: streak blocked inside geometry (branchless)
-    float sd=scene(cp);
-    float visible=smoothstep(0.0,0.05,sd);
-    // Animated streak: downward motion
-    float sy=fract(-t*uCScale*1.5+fract(sin(seed*183.3)*43758.5));
-    float yMatch=exp(-abs(fract(cp.y*0.3+0.5)-sy)*12.0);
-    float brightness=exp(-distStreak*25.0)*visible*yMatch*0.15;
-    acc+=vec3(0.4,0.6,1.0)*brightness;
-  }
-  return acc;
+vec3 calcNormal(vec3 p){
+  float eps=0.001+destruction*0.02;
+  vec2 e=vec2(eps,0.0);
+  return normalize(vec3(
+    scene(p+e.xyy)-scene(p-e.xyy),
+    scene(p+e.yxy)-scene(p-e.yxy),
+    scene(p+e.yyx)-scene(p-e.yyx)
+  ));
 }
 
 void main(){
@@ -633,10 +390,7 @@ void main(){
 
   if(d<0.001){
     vec3 p=ro+rd*totalDist;
-    vec3 n=calcN(p,totalDist);
-
-    // 掟 III: Occlusion flux — SDF density-based unified shadow
-    float ao=occlusionFlux(p,n);
+    vec3 n=calcNormal(p);
 
     vec3 lightDir=normalize(vec3(1,1,2));
     float diff=max(dot(n,lightDir),0.0);
@@ -655,8 +409,7 @@ void main(){
     // Subtle always; intensifies during shatter (thin broken pieces)
     float sssStrength=0.12+shatter*0.6;
 
-    // Occlusion flux applied to diffuse + specular
-    col=vec3(0.04)*brokenDiff*ao+vec3(0.6)*brokenSpec*ao+vec3(0.15)*fres;
+    col=vec3(0.04)*brokenDiff+vec3(0.6)*brokenSpec+vec3(0.15)*fres;
     col+=vec3(sss*sssStrength);
 
     float edge=1.0-max(dot(n,-rd),0.0);
@@ -666,23 +419,10 @@ void main(){
     col*=fog;
   }
 
-  // 掟 I: Energy flux — SDF CCD collision with all geometry
-  col+=energyFlux(ro,rd,totalDist);
-
-  // Mass-driven meteor: adiabatic compression glow + plasma sheath
-  col+=meteorGlow(ro,rd,totalDist);
-
-  // Physical rain: SDF-occluded streaks (Law 5)
-  col+=rainLayer(ro,rd,totalDist);
-
   float glow=exp(-totalDist*0.5)*0.03;
   col+=vec3(glow);
 
   col=pow(col,vec3(0.9));
-
-  // Law V: Blue noise dithering — banish 8-bit banding
-  float dNoise=fract(dot(gl_FragCoord.xy,vec2(0.7548776662,0.5698402909))+fract(t*7.23)*0.3819660113);
-  col+=(dNoise-0.5)*0.00392157;
 
   gl_FragColor=vec4(col,1);
 }
@@ -715,26 +455,8 @@ const mActiveLoc=gl.getUniformLocation(prog,'mActive');
 const entropyLoc=gl.getUniformLocation(prog,'entropy');
 const destructionLoc=gl.getUniformLocation(prog,'destruction');
 const shatterLoc=gl.getUniformLocation(prog,'shatter');
-const meteorPosLoc=gl.getUniformLocation(prog,'uMeteorPos');
-const meteorRadiusLoc=gl.getUniformLocation(prog,'uMeteorRadius');
-const meteorActiveLoc=gl.getUniformLocation(prog,'uMeteorActive');
-const meteorSpeedLoc=gl.getUniformLocation(prog,'uMeteorSpeed');
-const cScaleLoc=gl.getUniformLocation(prog,'uCScale');
 
-var prevDrawTime=0;
 function draw(now){
-  var dt=(now-prevDrawTime)*0.001;
-  prevDrawTime=now;
-  if(dt>0.1)dt=0.016;
-
-  // Path Ω: spacetime elasticity
-  AlicePathOmega.update(now);
-  var cS=AlicePathOmega.cScale;
-
-  // Mass-driven meteor physics
-  AliceMeteor.update(dt,now);
-  var mp=AliceMeteor.pos;
-
   gl.uniform1f(tLoc,now*0.001);
   gl.uniform2f(rLoc,canvas.width,canvas.height);
   gl.uniform2f(mouseLoc,AlicePointer.x,AlicePointer.y);
@@ -742,11 +464,6 @@ function draw(now){
   gl.uniform1f(entropyLoc,AliceEntropy.state.level);
   gl.uniform1f(destructionLoc,AliceEntropy.destructionProgress());
   gl.uniform1f(shatterLoc,AliceEntropy.shatter.value);
-  gl.uniform3f(meteorPosLoc,mp[0],mp[1],mp[2]);
-  gl.uniform1f(meteorRadiusLoc,AliceMeteor.radius);
-  gl.uniform1f(meteorActiveLoc,AliceMeteor.active?1.0:0.0);
-  gl.uniform1f(meteorSpeedLoc,AliceMeteor.speed);
-  gl.uniform1f(cScaleLoc,cS);
   gl.drawArrays(gl.TRIANGLE_STRIP,0,4);
   requestAnimationFrame(draw);
 }
@@ -1169,12 +886,6 @@ function startAudio(){
     // Filter opens up during destruction
     var baseFreq=200+entropy*300+intensity*800;
     filter.frequency.value+=(baseFreq-filter.frequency.value)*0.1;
-
-    // Path Ω: slow-motion synth — frequencies shift with light-speed
-    var cS=AlicePathOmega.cScale;
-    carrier.frequency.value=55*cS;
-    carrier2.frequency.value=110*cS;
-    subBass.frequency.value=27.5*cS;
 
     setTimeout(entropyAudioLoop,50);
   }
