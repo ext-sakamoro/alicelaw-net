@@ -26,8 +26,8 @@ float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
 float hash3(vec3 p){return fract(sin(dot(p,vec3(127.1,311.7,74.7)))*43758.5453);}
 float vnoise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.0-2.0*f);return mix(mix(hash(i),hash(i+vec2(1,0)),f.x),mix(hash(i+vec2(0,1)),hash(i+vec2(1,1)),f.x),f.y);}
 float vnoise3(vec3 p){vec3 i=floor(p),f=fract(p);f=f*f*(3.0-2.0*f);float n00=mix(hash3(i),hash3(i+vec3(1,0,0)),f.x);float n10=mix(hash3(i+vec3(0,1,0)),hash3(i+vec3(1,1,0)),f.x);float n01=mix(hash3(i+vec3(0,0,1)),hash3(i+vec3(1,0,1)),f.x);float n11=mix(hash3(i+vec3(0,1,1)),hash3(i+vec3(1,1,1)),f.x);return mix(mix(n00,n10,f.y),mix(n01,n11,f.y),f.z);}
-float fbm(vec2 p){float v=0.0,a=0.5;mat2 r=mat2(0.8,0.6,-0.6,0.8);for(int i=0;i<5;i++){v+=a*vnoise(p);p=r*p*2.1;a*=0.48;}return v;}
-float fbm3(vec3 p){float v=0.0,a=0.5;for(int i=0;i<4;i++){v+=a*vnoise3(p);p=p*2.15+vec3(1.7,3.2,2.8);a*=0.45;}return v;}
+float fbm(vec2 p){float v=0.0,a=0.5;mat2 r=mat2(0.8,0.6,-0.6,0.8);for(int i=0;i<3;i++){v+=a*vnoise(p);p=r*p*2.1;a*=0.48;}return v;}
+float fbm3(vec3 p){float v=0.0,a=0.5;for(int i=0;i<3;i++){v+=a*vnoise3(p);p=p*2.15+vec3(1.7,3.2,2.8);a*=0.45;}return v;}
 
 // ═══ SDF Primitives ═══
 float sdBox(vec3 p,vec3 b){vec3 q=abs(p)-b;return length(max(q,0.0))+min(max(q.x,max(q.y,q.z)),0.0);}
@@ -65,27 +65,27 @@ vec3 spectralToRGB(float lambda){
 vec3 spectralBlackbody(float K){
   vec3 acc=vec3(0);
   float invK=1.0/(K+0.001);
-  for(int i=0;i<8;i++){
-    float lambda=380.0+float(i)*48.57; // 380 to 720nm
+  for(int i=0;i<4;i++){
+    float lambda=380.0+float(i)*113.3; // 380 to 720nm, 4サンプル
     // Planck's law (simplified): S(λ) ∝ λ^-5 / (exp(hc/λkT) - 1)
     float lm=lambda*1e-3; // micro-scale for numerical stability
     float x=1.4388e3*invK/(lambda+0.001); // hc/kT * 1/lambda (in nm)
     float planck=1.0/(lm*lm*lm*lm*lm*(exp(min(x,80.0))-1.0)+0.001);
     acc+=spectralToRGB(lambda)*planck;
   }
-  return max(acc*0.000125,vec3(0)); // normalize
+  return max(acc*0.00025,vec3(0)); // normalize (4サンプル補正)
 }
 // Rayleigh spectral sky — wavelength-dependent λ^-4 scattering
 vec3 rayleighSpectral(float mu,float am,float densR,vec3 extR){
   vec3 acc=vec3(0);
-  for(int i=0;i<6;i++){
-    float lambda=400.0+float(i)*60.0; // 400-700nm
+  for(int i=0;i<4;i++){
+    float lambda=400.0+float(i)*100.0; // 400-700nm, 4サンプル
     float scatter=1.0/(lambda*lambda*lambda*lambda)*1e10; // λ^-4
     float phR=0.059683*(1.0+mu*mu);
     vec3 rgb=spectralToRGB(lambda);
     acc+=rgb*scatter*phR*am*densR;
   }
-  return max(acc*extR*0.008,vec3(0));
+  return max(acc*extR*0.012,vec3(0)); // 4サンプル補正
 }
 // Micro-FBM — nanoscale thermal vibration displacement for atomic-level surface detail
 vec3 microNormal(vec3 p,vec3 n,float freq,float amp){
@@ -103,8 +103,7 @@ vec3 aBloom(float d,vec3 gc,float intensity,float falloff){
 // Domain warp — 2-pass analytic spatial distortion
 vec3 dWarp(vec3 p,float t,float intensity){
   float fx=sin(p.y*1.7+t*0.3);float fy=cos(p.z*1.3+t*0.5);float fz=sin(p.x*2.1+t*0.4);
-  float gx=cos(fy*2.3+fx*1.1);float gy=sin(fz*1.9+fy*0.7);float gz=cos(fx*1.5+fz*1.3);
-  return p+vec3(gx,gy,gz)*intensity;
+  return p+vec3(fx,fy,fz)*intensity;
 }
 // Dielectric Breakdown Model — fractal space-folding discharge
 float dbmDischarge(vec3 p,vec3 src,float charge,float t){
@@ -522,16 +521,46 @@ vec2 map(vec3 p){
   return vec2(d,id);
 }
 
+// ═══ map_lite — AO/Shadow/Rain用軽量SDF (Orb/Ring/Meteor/Debris省略) ═══
+float map_lite(vec3 p){
+  float d=p.y;
+  // Lobby base
+  float cbase=sdRoundBox(p-vec3(0,0.22,0),vec3(7.5,0.22,7.5),0.1);
+  d=min(d,cbase);
+  // Services base + towers
+  float sbase=sdRoundBox(p-vec3(0,0.14,-35.0),vec3(11.5,0.14,4.5),0.08);
+  d=min(d,sbase);
+  for(int i=0;i<4;i++){float x=float(i)*4.0-6.0;float h=5.2+sin(float(i)*1.5)*0.4;
+    d=min(d,sdRoundBox(p-vec3(x,h*0.5,-35.0),vec3(1.55,h*0.5,0.28),0.12));}
+  // Research wall + base
+  float res=sdRoundBox(p-vec3(35.0,4.8,0),vec3(0.35,4.8,8.5),0.15);
+  d=min(d,res);
+  float rbase=sdRoundBox(p-vec3(35.0,0.14,0),vec3(2.8,0.14,10.5),0.08);
+  d=min(d,rbase);
+  // Stats base + pedestals
+  float stbase=sdRoundBox(p-vec3(0,0.14,35.0),vec3(11.5,0.14,4.5),0.08);
+  d=min(d,stbase);
+  for(int i=0;i<4;i++){float x=float(i)*4.0-6.0;
+    d=min(d,sdRoundBox(p-vec3(x,1.6,35.0),vec3(1.05,1.6,1.05),0.1));}
+  // Contact base
+  float pbase=sdRoundBox(p-vec3(-35.0,0.14,0),vec3(6.5,0.14,6.5),0.08);
+  d=min(d,pbase);
+  // Glass dome
+  float gls=sdSphere(p-vec3(0,12.5,0),3.0);gls=max(gls,-sdSphere(p-vec3(0,12.5,0),2.75));gls=max(gls,-(p.y-12.5));
+  d=min(d,gls);
+  return d;
+}
+
 // ═══ Normal / AO / Shadow ═══
 vec3 calcN(vec3 p,float dist){float e=max(0.0002,dist*0.0003);vec2 k=vec2(e,-e);return normalize(k.xyy*map(p+k.xyy).x+k.yyx*map(p+k.yyx).x+k.yxy*map(p+k.yxy).x+k.xxx*map(p+k.xxx).x);}
-float ao(vec3 p,vec3 n){float o=0.0,w=1.0;for(int i=0;i<6;i++){float h=0.008+0.12*float(i);o+=(h-map(p+n*h).x)*w;w*=0.58;}return SAT(1.0-4.0*o);}
-// Shadow Proxy: 2 SDF evaluations (map() 20→2, Reality Law compliant)
-float shadowProxy(vec3 p,vec3 n,vec3 lDir){float h1=0.1,h2=0.4;float d1=map(p+lDir*h1).x;float d2=map(p+lDir*h2).x;float occ=SAT((d1/h1+d2/h2)*0.5);float NdL=max(dot(n,lDir),0.0);return occ*NdL;}
+float ao(vec3 p,vec3 n){float o=0.0,w=1.0;for(int i=0;i<6;i++){float h=0.008+0.12*float(i);o+=(h-map_lite(p+n*h))*w;w*=0.58;}return SAT(1.0-4.0*o);}
+// Shadow Proxy: 2 SDF evaluations (map_lite使用)
+float shadowProxy(vec3 p,vec3 n,vec3 lDir){float h1=0.1,h2=0.4;float d1=map_lite(p+lDir*h1);float d2=map_lite(p+lDir*h2);float occ=SAT((d1/h1+d2/h2)*0.5);float NdL=max(dot(n,lDir),0.0);return occ*NdL;}
 
-// ═══ Rain Occlusion (upward SDF trace) ═══
+// ═══ Rain Occlusion (upward SDF trace, map_lite使用) ═══
 float rainOcc(vec3 p){
   float t=0.3;
-  for(int i=0;i<3;i++){float h=map(p+vec3(0,t,0)).x;if(h<0.08)return 0.0;t+=max(h,0.5);}
+  for(int i=0;i<3;i++){float h=map_lite(p+vec3(0,t,0));if(h<0.08)return 0.0;t+=max(h,0.5);}
   return 1.0;
 }
 
@@ -651,15 +680,15 @@ vec3 skyColor(vec3 rd,vec3 sunDir,vec3 moonDir,float dayF){
   float mwDot=abs(dot(rd,normalize(vec3(0.3,0.7,0.15))));
   float mwAng=acos(clamp(mwDot,0.0,1.0));
   float mwBand=exp(-(mwAng-0.2)*(mwAng-0.2)*6.0);
-  sky+=vec3(0.045,0.03,0.06)*mwBand*fbm(rd.xz*3.5+rd.y*2.0)*nightF*smoothstep(0.05,0.35,y);
+  sky+=vec3(0.045,0.03,0.06)*mwBand*vnoise(rd.xz*3.5+rd.y*2.0)*nightF*smoothstep(0.05,0.35,y);
 
   // ── Nebula ──
-  sky+=vec3(0.07,0.012,0.11)*fbm(rd.xz*2.5+rd.y*1.5)*0.13*(1.0-abs(y))*nightF;
-  sky+=vec3(0.012,0.04,0.09)*fbm(rd.xz*3.5-rd.y*2.0+100.0)*0.09*(1.0-abs(y))*nightF;
+  sky+=vec3(0.07,0.012,0.11)*vnoise(rd.xz*2.5+rd.y*1.5)*0.13*(1.0-abs(y))*nightF;
+  sky+=vec3(0.012,0.04,0.09)*vnoise(rd.xz*3.5-rd.y*2.0+100.0)*0.09*(1.0-abs(y))*nightF;
 
   // ── Aurora ──
   float aurora=smoothstep(0.2,0.55,y)*smoothstep(0.8,0.45,y);
-  float aN=fbm(vec2(rd.x*4.0+uTime*0.08,rd.z*2.5+uTime*0.04));
+  float aN=vnoise(vec2(rd.x*4.0+uTime*0.08,rd.z*2.5+uTime*0.04));
   sky+=vec3(0.0,0.18,0.08)*aurora*aN*0.2*nightF;
   sky+=vec3(0.06,0.0,0.1)*aurora*(1.0-aN)*0.08*nightF;
 
@@ -716,14 +745,14 @@ void main(){
 
   // Raymarch + analytic bloom accumulation
   float t=0.0;vec2 hit;vec3 bloomAcc=vec3(0);
-  for(int i=0;i<96;i++){
+  for(int i=0;i<64;i++){
     hit=map(ro+rd*t);
     // Analytic bloom: branchless accumulation via step masks
     float bm1=step(0.5,hit.y)*step(hit.y,1.5);
     float bm2=step(16.5,hit.y)*step(hit.y,17.5);
     float bm3=step(13.5,hit.y)*step(hit.y,15.5);
     bloomAcc+=bm1*aBloom(hit.x,vec3(0.3,0.5,1.0),0.012,8.0)+bm2*aBloom(hit.x,vec3(0.4,0.6,1.2),0.008,10.0)+bm3*aBloom(hit.x,blackbody(6000.0),0.015,6.0);
-    if(hit.x<0.0004||t>uMaxDist)break;t+=hit.x;
+    if(hit.x<0.0004||t>uMaxDist)break;t+=hit.x*max(1.0,t*0.02);
   }
 
   vec3 col=sky+bloomAcc;
@@ -734,12 +763,13 @@ void main(){
     vec3 n=calcN(p,t);
     vec3 V=-rd;
 
-    // Floor bump
+    // Floor bump (vnoise 2D前方差分)
     if(hit.y<0.5){
       vec2 e=vec2(0.025,0);
-      float nx=vnoise3(vec3(p.x+e.x,p.y,p.z)*4.0)-vnoise3(vec3(p.x-e.x,p.y,p.z)*4.0);
-      float nz=vnoise3(vec3(p.x,p.y,p.z+e.x)*4.0)-vnoise3(vec3(p.x,p.y,p.z-e.x)*4.0);
-      n=normalize(n+vec3(nx,0,nz)*0.6);
+      float n0=vnoise(p.xz*4.0);
+      float nx=vnoise((p.xz+e)*4.0)-n0;
+      float nz=vnoise((p.xz+e.yx)*4.0)-n0;
+      n=normalize(n+vec3(nx,0,nz)*(0.6/e.x));
     }
     Mat mat=getMat(hit.y,p);
     rocc=1.0;if(uWxRain>0.01)rocc=rainOcc(p);
@@ -831,7 +861,7 @@ void main(){
     if(hit.y<0.5){
       vec3 reflDir=reflect(rd,n);
       float rt=0.0;vec2 rh;
-      for(int i=0;i<32;i++){rh=map(p+reflDir*rt);if(rh.x<0.001||rt>45.0)break;rt+=rh.x*0.95;}
+      for(int i=0;i<16;i++){rh=map(p+reflDir*rt);if(rh.x<0.001||rt>45.0)break;rt+=rh.x;}
       vec3 reflCol=skyColor(reflDir,sunDir,moonDir,dayF);
       if(rt<45.0){
         vec3 rp=p+reflDir*rt;vec3 rn=calcN(rp,t+rt);Mat rm=getMat(rh.y,rp);
