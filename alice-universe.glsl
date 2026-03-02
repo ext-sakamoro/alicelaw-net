@@ -763,13 +763,12 @@ void main(){
     vec3 n=calcN(p,t);
     vec3 V=-rd;
 
-    // Floor bump (vnoise 2D前方差分)
+    // Floor bump (vnoise 2D中心差分)
     if(hit.y<0.5){
       vec2 e=vec2(0.025,0);
-      float n0=vnoise(p.xz*4.0);
-      float nx=vnoise((p.xz+e)*4.0)-n0;
-      float nz=vnoise((p.xz+e.yx)*4.0)-n0;
-      n=normalize(n+vec3(nx,0,nz)*(0.6/e.x));
+      float nx=vnoise((p.xz+e)*4.0)-vnoise((p.xz-e)*4.0);
+      float nz=vnoise((p.xz+e.yx)*4.0)-vnoise((p.xz-e.yx)*4.0);
+      n=normalize(n+vec3(nx,0,nz)*0.6);
     }
     Mat mat=getMat(hit.y,p);
     rocc=1.0;if(uWxRain>0.01)rocc=rainOcc(p);
