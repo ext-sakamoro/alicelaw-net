@@ -2,6 +2,12 @@
 CLAUDE.md
 .claude/
 
+# Dependencies
+node_modules/
+
+# Wrangler
+.wrangler/
+
 # OS
 .DS_Store
 Thumbs.db
