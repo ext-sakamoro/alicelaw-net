@@ -142,7 +142,7 @@ var infoPoints=[
   {pos:[36,6,-2],html:'<div class="glass"><h3>The Reality Law</h3><p>Spectral Rendering<br>Spacetime Elasticity<br>Deterministic Entropy</p></div>',range:18},
   {pos:[36,4,2],html:'<div class="glass"><h3>AGI Olympics V3</h3><div class="bench">A.L.I.C.E.: <strong>90.2%</strong></div><div class="bench">Gemini 2.5 Pro: 13.3%</div><div class="bench">Claude Sonnet 4.5: 13.3%</div><p style="margin-top:0.4rem;font-size:0.7rem">150MB / 5min / 6.8x accuracy</p></div>',range:18},
   {pos:[0,6,35],html:'<h2>Ecosystem</h2>',range:28},
-  {pos:[-6,5,35],html:'<div class="glass"><div class="stat-num">55+</div><p>Rust Crates</p></div>',range:16},
+  {pos:[-6,5,35],html:'<div class="glass"><div class="stat-num">506</div><p>Rust Crates</p></div>',range:16},
   {pos:[-2,5,35],html:'<div class="glass"><div class="stat-num">24</div><p>Factory Presets</p></div>',range:16},
   {pos:[2,5,35],html:'<div class="glass"><div class="stat-num">6</div><p>Trained Specialists</p></div>',range:16},
   {pos:[6,5,35],html:'<div class="glass"><div class="stat-num">17</div><p>Core Components</p></div>',range:16},
