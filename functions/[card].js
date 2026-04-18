@@ -23,7 +23,16 @@ const ROUTES = {
         { name: "night",    hours: [0, 9],   url: "https://alicelaw.net/" }
       ]
     },
-    campaigns: []
+    campaigns: [
+      {
+        name: "force-top-2026-04-18",
+        active: true,
+        start: "2026-04-18T00:00:00+09:00",
+        end:   "2026-04-18T23:59:59+09:00",
+        url: "https://alicelaw.net/",
+        status: 302
+      }
+    ]
   }
 };
 
