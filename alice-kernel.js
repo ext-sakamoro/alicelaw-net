@@ -181,28 +181,34 @@ function updateEnvironment(dt){
 
 // ── Info Points ────────────────────────────────────────
 var infoPoints=[
-  {pos:[0,7.5,0],html:'<div class="glass"><h2>Project A.L.I.C.E.</h2><p>Modular AI Agents<br>Autonomous Layered Intelligence</p></div>',range:35},
+  // Lobby (center)
+  {pos:[0,7.5,0],html:'<div class="glass"><h2>ProjectALICE</h2><p>Rust-native AI Stack<br>9 Core Crates + 220 Eco-System Modules</p></div>',range:35},
+  // Modules zone (-Z)
   {pos:[0,10,-35],html:'<h2>Modules</h2>',range:28},
-  {pos:[-6,9.5,-35],html:'<div class="glass"><h3>ALICE-SDF</h3><p>Signed Distance Fields<br>CSG Modeling / Mesh Gen<br>SIMD + Rayon Optimized</p></div>',range:18},
-  {pos:[-2,9.5,-35],html:'<div class="glass"><h3>ALICE-Physics</h3><p>Rigid Body Dynamics<br>Fix128 Precision<br>SDF Collision Detection</p></div>',range:18},
-  {pos:[2,9.5,-35],html:'<div class="glass"><h3>ALICE-Edge</h3><p>Edge Computing<br>IoT Gateway<br>Latency-Optimized</p></div>',range:18},
-  {pos:[6,9.5,-35],html:'<div class="glass"><h3>ALICE-Crypto</h3><p>Post-Quantum Crypto<br>Zero-Knowledge Proofs<br>Secure Communication</p></div>',range:18},
-  {pos:[36,8,0],html:'<h2>Research</h2>',range:28},
-  {pos:[36,6,-2],html:'<div class="glass"><h3>The Reality Law</h3><p>Spectral Rendering<br>Spacetime Elasticity<br>Deterministic Entropy</p></div>',range:18},
-  {pos:[36,4,2],html:'<div class="glass"><h3>AGI Olympics V3</h3><div class="bench">A.L.I.C.E.: <strong>90.2%</strong></div><div class="bench">Gemini 2.5 Pro: 13.3%</div><div class="bench">Claude Sonnet 4.5: 13.3%</div><p style="margin-top:0.4rem;font-size:0.7rem">150MB / 5min / 6.8x accuracy</p></div>',range:18},
+  {pos:[-6,9.5,-35],html:'<div class="glass"><h3>ALICE-SDF</h3><p>Signed Distance Fields<br>CSG / Mesh / JIT<br>SIMD + Rayon + wgpu</p></div>',range:18},
+  {pos:[-2,9.5,-35],html:'<div class="glass"><h3>ALICE-Physics</h3><p>Rigid Body Dynamics<br>Fix128 Fixed-Point<br>SDF Collision</p></div>',range:18},
+  {pos:[2,9.5,-35],html:'<div class="glass"><h3>ALICE-Edge</h3><p>Edge Runtime<br>ARM64 / Pi5 Ready<br>1.4MB Binary</p></div>',range:18},
+  {pos:[6,9.5,-35],html:'<div class="glass"><h3>ALICE-Crypto</h3><p>Post-Quantum<br>Zero-Knowledge<br>PKI / Signing</p></div>',range:18},
+  // Core zone (+X) — replaces old "Research"
+  {pos:[36,8,0],html:'<h2>Core</h2>',range:28},
+  {pos:[36,7,-4],html:'<div class="glass"><h3>alice-cognitive</h3><p>Reasoning / Memory<br>106 Toolkit Functions<br>1,488 Tests</p></div>',range:18},
+  {pos:[36,5,0],html:'<div class="glass"><h3>alice-autonomy</h3><p>BDI / Level5Manager<br>Goal Planning<br>351 Tests</p></div>',range:18},
+  {pos:[36,3,4],html:'<div class="glass"><h3>alice-consciousness</h3><p>IIT \u03A6 / Ethics<br>Global Workspace<br>224 Tests</p></div>',range:18},
+  // Ecosystem zone (+Z)
   {pos:[0,6,35],html:'<h2>Ecosystem</h2>',range:28},
-  {pos:[-6,5,35],html:'<div class="glass"><div class="stat-num">506</div><p>Rust Crates</p></div>',range:16},
-  {pos:[-2,5,35],html:'<div class="glass"><div class="stat-num">24</div><p>Factory Presets</p></div>',range:16},
-  {pos:[2,5,35],html:'<div class="glass"><div class="stat-num">6</div><p>Trained Specialists</p></div>',range:16},
-  {pos:[6,5,35],html:'<div class="glass"><div class="stat-num">17</div><p>Core Components</p></div>',range:16},
-  {pos:[-35,8,0],html:'<h2>Ecosystem</h2>',range:28},
-  {pos:[-35,5,0],html:'<div class="glass"><p style="color:#4af">alicelaw.net</p><p style="color:#4af">github.com/ext-sakamoro</p><p style="margin-top:0.4rem;font-size:0.75rem">MIT / AGPL-3.0</p></div>',range:18}
+  {pos:[-6,5,35],html:'<div class="glass"><div class="stat-num">220</div><p>Eco-System Crates</p></div>',range:16},
+  {pos:[-2,5,35],html:'<div class="glass"><div class="stat-num">9</div><p>Core Crates</p></div>',range:16},
+  {pos:[2,5,35],html:'<div class="glass"><div class="stat-num">2,376</div><p>Tests Passing</p></div>',range:16},
+  {pos:[6,5,35],html:'<div class="glass"><div class="stat-num">38</div><p>\u00B5s think() latency</p></div>',range:16},
+  // Links zone (-X) — fix mislabeled "Ecosystem"
+  {pos:[-35,8,0],html:'<h2>Links</h2>',range:28},
+  {pos:[-35,5,0],html:'<div class="glass"><p style="color:#4af">alicelaw.net</p><p style="color:#4af">github.com/ext-sakamoro</p><p style="margin-top:0.4rem;font-size:0.75rem">MIT OR Apache-2.0</p></div>',range:18}
 ];
 var labelsEl=document.getElementById('labels');
 infoPoints.forEach(function(ip){var el=document.createElement('div');el.className='label';el.innerHTML=ip.html;el.style.display='none';labelsEl.appendChild(el);ip.el=el;});
 function projectLabel(wp){var rx=wp[0]-cam.pos[0],ry=wp[1]-cam.pos[1],rz=wp[2]-cam.pos[2];var z=rx*cam.fwd[0]+ry*cam.fwd[1]+rz*cam.fwd[2];if(z<0.5)return null;var x=rx*cam.right[0]+ry*cam.right[1]+rz*cam.right[2];var y=rx*cam.up[0]+ry*cam.up[1]+rz*cam.up[2];var hw=innerWidth/2,hh=innerHeight/2;return{x:hw+(x/z)*hh,y:hh-(y/z)*hh,dist:z};}
 function updateLabels(){for(var i=0;i<infoPoints.length;i++){var ip=infoPoints[i];var dx=ip.pos[0]-cam.pos[0],dy=ip.pos[1]-cam.pos[1],dz=ip.pos[2]-cam.pos[2];var dist=Math.sqrt(dx*dx+dy*dy+dz*dz);if(dist>ip.range){ip.el.style.display='none';continue;}var proj=projectLabel(ip.pos);if(!proj||proj.x<-200||proj.x>innerWidth+200||proj.y<-200||proj.y>innerHeight+200){ip.el.style.display='none';continue;}var alpha=Math.min(1,(ip.range-dist)/(ip.range*0.4));var scale=Math.min(1.2,12/proj.dist);ip.el.style.display='block';ip.el.style.left=proj.x+'px';ip.el.style.top=proj.y+'px';ip.el.style.opacity=alpha;ip.el.style.transform='translate(-50%,-100%) scale('+scale+')';}}
-function updateLocationIndicator(){var cx=cam.pos[0],cz=cam.pos[2];var name='Lobby';if(cz<-15)name='Services';else if(cx>15)name='Research';else if(cz>15)name='Stats';else if(cx<-15)name='Contact';locEl.textContent=name+' ['+Math.round(cx)+', '+Math.round(cam.pos[1])+', '+Math.round(cz)+']';}
+function updateLocationIndicator(){var cx=cam.pos[0],cz=cam.pos[2];var name='Lobby';if(cz<-15)name='Modules';else if(cx>15)name='Core';else if(cz>15)name='Ecosystem';else if(cx<-15)name='Links';locEl.textContent=name+' ['+Math.round(cx)+', '+Math.round(cam.pos[1])+', '+Math.round(cz)+']';}
 
 // ── Minimap ────────────────────────────────────────────
 var mmCtx=minimapEl.getContext('2d');
