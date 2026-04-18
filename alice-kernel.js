@@ -84,68 +84,70 @@ canvas.addEventListener('touchcancel',function(e){for(var i=0;i<e.changedTouches
 
 function updateCameraVectors(){var cp=Math.cos(cam.pitch),sp=Math.sin(cam.pitch),cy=Math.cos(cam.yaw),sy=Math.sin(cam.yaw);cam.fwd=[sy*cp,sp,-cy*cp];cam.right=[cy,0,sy];cam.up=[-sy*sp,cp,cy*sp];}
 
-// ── SDF Collision (JS port of static geometry from alice-universe.glsl map()) ──
-var PLAYER_RADIUS=0.4;
+// ── SDF Collision (JS port of static geometry + CCD solver) ──
+var COL_RADIUS=0.3,COL_STEPS=4;
 function _sdBox(px,py,pz,bx,by,bz){var qx=Math.abs(px)-bx,qy=Math.abs(py)-by,qz=Math.abs(pz)-bz;var mx=Math.max(qx,0),my=Math.max(qy,0),mz=Math.max(qz,0);return Math.sqrt(mx*mx+my*my+mz*mz)+Math.min(Math.max(qx,Math.max(qy,qz)),0);}
 function _sdRoundBox(px,py,pz,bx,by,bz,r){return _sdBox(px,py,pz,bx-r,by-r,bz-r)-r;}
 function _sdSphere(px,py,pz,r){return Math.sqrt(px*px+py*py+pz*pz)-r;}
 function _sdCyl(px,py,pz,h,r){var dx=Math.sqrt(px*px+pz*pz)-r,dy=Math.abs(py)-h;return Math.min(Math.max(dx,dy),0)+Math.sqrt(Math.max(dx,0)*Math.max(dx,0)+Math.max(dy,0)*Math.max(dy,0));}
-function _sdTorus(px,py,pz,tx,ty){var qx=Math.sqrt(px*px+pz*pz)-tx;return Math.sqrt(qx*qx+py*py)-ty;}
 function sdStatic(px,py,pz){
   var d=py;
-  // Lobby zone (center)
-  var dcz=Math.sqrt(px*px+pz*pz)-16.0;
-  if(dcz<d){
-    for(var i=0;i<4;i++){
-      var ang=i*1.5707963267948966,cx=Math.cos(ang)*5.5,cz=Math.sin(ang)*5.5;
-      var pil=_sdCyl(px-cx,py-3.5,pz-cz,3.5,0.22);
-      pil=Math.min(pil,_sdCyl(px-cx,py-0.12,pz-cz,0.12,0.35));
-      pil=Math.min(pil,_sdCyl(px-cx,py-6.88,pz-cz,0.12,0.35));
-      if(pil<d)d=pil;
-    }
-    var cbase=_sdRoundBox(px,py-0.22,pz,7.5,0.22,7.5,0.1);if(cbase<d)d=cbase;
-    var eOrb=_sdSphere(px,py-5.2,pz,2.2);if(eOrb<d)d=eOrb;
-    var a1=_sdTorus(px,py-7.2,pz,6.2,0.055);if(a1<d)d=a1;
-    var a2=_sdTorus(px,py-6.2,pz,5.7,0.04);if(a2<d)d=a2;
-    var a3=_sdTorus(px,py-5.2,pz,5.2,0.035);if(a3<d)d=a3;
+  // Lobby: 4 pillars + caps + base + energy orb
+  for(var i=0;i<4;i++){
+    var ang=i*1.5707963267948966,cx=Math.cos(ang)*5.5,cz=Math.sin(ang)*5.5;
+    d=Math.min(d,_sdRoundBox(px-cx,py-3.5,pz-cz,0.25,3.5,0.25,0.008));
+    d=Math.min(d,_sdCyl(px-cx,py-0.12,pz-cz,0.12,0.35));
+    d=Math.min(d,_sdCyl(px-cx,py-6.88,pz-cz,0.12,0.35));
   }
-  // Modules zone (-Z)
-  var dnz=Math.abs(pz+35.0)-18.0;
-  if(dnz<d){
-    for(var j=0;j<4;j++){var x=j*4.0-6.0;var h=5.2+Math.sin(j*1.5)*0.4;
-      var svc=_sdRoundBox(px-x,py-h*0.5,pz+35.0,1.55,h*0.5,0.28,0.12);if(svc<d)d=svc;}
-    var sbase=_sdRoundBox(px,py-0.14,pz+35.0,11.5,0.14,4.5,0.08);if(sbase<d)d=sbase;
-    var seOrb=_sdSphere(px,py-6.5,pz+35.0,1.8);if(seOrb<d)d=seOrb;
+  d=Math.min(d,_sdRoundBox(px,py-0.22,pz,7.5,0.22,7.5,0.1));
+  d=Math.min(d,_sdSphere(px,py-5.2,pz,2.2));
+  // Modules (-Z): base + 4 obelisks + orb
+  d=Math.min(d,_sdRoundBox(px,py-0.14,pz+35,11.5,0.14,4.5,0.08));
+  for(var j=0;j<4;j++){
+    var sx=j*4-6,sh=5.2+Math.sin(j*1.5)*0.4;
+    d=Math.min(d,_sdRoundBox(px-sx,py-sh*0.5,pz+35,1.55,sh*0.5,0.28,0.12));
   }
-  // Core zone (+X)
-  var dez=Math.abs(px-35.0)-15.0;
-  if(dez<d){
-    var res=_sdRoundBox(px-35.0,py-4.8,pz,0.35,4.8,8.5,0.15);if(res<d)d=res;
-    var rbase=_sdRoundBox(px-35.0,py-0.14,pz,2.8,0.14,10.5,0.08);if(rbase<d)d=rbase;
-    var reOrb=_sdSphere(px-35.0,py-5.5,pz,1.6);if(reOrb<d)d=reOrb;
+  d=Math.min(d,_sdSphere(px,py-6.5,pz+35,1.8));
+  // Core (+X): gyroid wall + base + orb
+  d=Math.min(d,_sdRoundBox(px-35,py-4.8,pz,0.35,4.8,8.5,0.15));
+  d=Math.min(d,_sdRoundBox(px-35,py-0.14,pz,2.8,0.14,10.5,0.08));
+  d=Math.min(d,_sdSphere(px-35,py-5.5,pz,1.6));
+  // Ecosystem (+Z): base + 4 cubes + orb
+  d=Math.min(d,_sdRoundBox(px,py-0.14,pz-35,11.5,0.14,4.5,0.08));
+  for(var k=0;k<4;k++){
+    var stx=k*4-6;
+    d=Math.min(d,_sdRoundBox(px-stx,py-1.6,pz-35,1.05,1.6,1.05,0.1));
   }
-  // Ecosystem zone (+Z)
-  var dsz=Math.abs(pz-35.0)-15.0;
-  if(dsz<d){
-    for(var k=0;k<4;k++){var x2=k*4.0-6.0;
-      var st=_sdRoundBox(px-x2,py-1.6,pz-35.0,1.05,1.6,1.05,0.1);if(st<d)d=st;}
-    var stbase=_sdRoundBox(px,py-0.14,pz-35.0,11.5,0.14,4.5,0.08);if(stbase<d)d=stbase;
-    var stOrb=_sdSphere(px,py-5.0,pz-35.0,1.6);if(stOrb<d)d=stOrb;
+  d=Math.min(d,_sdSphere(px,py-5.0,pz-35,1.6));
+  // Links (-X): base + 2 pillars + orb
+  d=Math.min(d,_sdRoundBox(px+35,py-0.14,pz,6.5,0.14,6.5,0.08));
+  for(var l=0;l<2;l++){
+    var zz=l*10-5;
+    d=Math.min(d,_sdRoundBox(px+35,py-3.5,pz-zz,0.25,3.5,0.25,0.008));
   }
-  // Links zone (-X)
-  var dwz=Math.abs(px+35.0)-12.0;
-  if(dwz<d){
-    var pbase=_sdRoundBox(px+35.0,py-0.14,pz,6.5,0.14,6.5,0.08);if(pbase<d)d=pbase;
-    for(var l=0;l<2;l++){var zz=l*10.0-5.0;
-      var pil2=_sdCyl(px+35.0,py-3.5,pz-zz,3.5,0.25);if(pil2<d)d=pil2;}
-    var ceOrb=_sdSphere(px+35.0,py-5.2,pz,1.8);if(ceOrb<d)d=ceOrb;
-  }
-  // Glass dome shell (upper hemisphere at [0,12.5,0] radius 3)
-  var gls=_sdSphere(px,py-12.5,pz,3.0);
-  gls=Math.max(gls,-_sdSphere(px,py-12.5,pz,2.75));
-  gls=Math.max(gls,-(py-12.5));
-  if(gls<d)d=gls;
+  d=Math.min(d,_sdSphere(px+35,py-5.2,pz,1.8));
+  // Glass dome (overhead)
+  d=Math.min(d,_sdSphere(px,py-12.5,pz,3.0));
   return d;
+}
+function _sdNormal(x,y,z){
+  var e=0.05;
+  var dx=sdStatic(x+e,y,z)-sdStatic(x-e,y,z);
+  var dy=sdStatic(x,y+e,z)-sdStatic(x,y-e,z);
+  var dz=sdStatic(x,y,z+e)-sdStatic(x,y,z-e);
+  var len=Math.sqrt(dx*dx+dy*dy+dz*dz);
+  if(len<0.0001)return{x:0,y:1,z:0};
+  return{x:dx/len,y:dy/len,z:dz/len};
+}
+function _sdfResolve(px,py,pz){
+  for(var i=0;i<COL_STEPS;i++){
+    var d=sdStatic(px,py,pz);
+    if(d>=COL_RADIUS)break;
+    var n=_sdNormal(px,py,pz);
+    var push=COL_RADIUS-d+0.01;
+    px+=n.x*push;py+=n.y*push;pz+=n.z*push;
+  }
+  return{x:px,y:py,z:pz};
 }
 
 function updateMovement(dt){
@@ -156,19 +158,24 @@ function updateMovement(dt){
   if(keys['a']||keys['arrowleft']){mx-=rx;mz-=rz;}
   if(keys['d']||keys['arrowright']){mx+=rx;mz+=rz;}
   var len=Math.sqrt(mx*mx+mz*mz);
-  if(len>0){
-    mx/=len;mz/=len;
-    var stepX=mx*MOVE_SPEED*dt,stepZ=mz*MOVE_SPEED*dt;
-    var probeY=cam.pos[1]-0.85;
-    var nx=cam.pos[0]+stepX;
-    if(sdStatic(nx,probeY,cam.pos[2])>PLAYER_RADIUS)cam.pos[0]=nx;
-    var nz=cam.pos[2]+stepZ;
-    if(sdStatic(cam.pos[0],probeY,nz)>PLAYER_RADIUS)cam.pos[2]=nz;
-  }
+  if(len>0){mx/=len;mz/=len;}
+  var nx=cam.pos[0]+mx*MOVE_SPEED*dt;
+  var nz=cam.pos[2]+mz*MOVE_SPEED*dt;
   if(keys[' '])cam.vy=FLY_SPEED;else cam.vy-=GRAVITY*dt;
   var ny=cam.pos[1]+cam.vy*dt;
-  if(cam.vy>0&&sdStatic(cam.pos[0],ny,cam.pos[2])<=PLAYER_RADIUS)cam.vy=0;
-  else cam.pos[1]=ny;
+  // Two-point CCD: foot (near ground) + body (eye level)
+  var foot=_sdfResolve(nx,ny-EYE_HEIGHT+0.1,nz);
+  var body=_sdfResolve(nx,ny,nz);
+  // Foot pushed up → step onto platform
+  var footY=foot.y+EYE_HEIGHT-0.1;
+  if(footY>ny){ny=footY;cam.vy=0;}
+  // Body XZ → horizontal push-out
+  cam.pos[0]=body.x;
+  cam.pos[2]=body.z;
+  // Smooth camera Y via EMA
+  var targetY=Math.max(ny,EYE_HEIGHT);
+  var emaAlpha=1-Math.exp(-dt*8.0);
+  cam.pos[1]+=(targetY-cam.pos[1])*emaAlpha;
   if(cam.pos[1]<EYE_HEIGHT){cam.pos[1]=EYE_HEIGHT;cam.vy=0;}
 }
 
