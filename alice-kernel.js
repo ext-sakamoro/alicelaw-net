@@ -166,16 +166,18 @@ function updateMovement(dt){
   // Two-point CCD: foot (near ground) + body (eye level)
   var foot=_sdfResolve(nx,ny-EYE_HEIGHT+0.1,nz);
   var body=_sdfResolve(nx,ny,nz);
-  // Foot pushed up → step onto platform
-  var footY=foot.y+EYE_HEIGHT-0.1;
-  if(footY>ny){ny=footY;cam.vy=0;}
-  // Body XZ → horizontal push-out
   cam.pos[0]=body.x;
   cam.pos[2]=body.z;
-  // Smooth camera Y via EMA
-  var targetY=Math.max(ny,EYE_HEIGHT);
-  var emaAlpha=1-Math.exp(-dt*8.0);
-  cam.pos[1]+=(targetY-cam.pos[1])*emaAlpha;
+  // Step-up only when not ascending (don't kill Space/▲ thrust)
+  var footY=foot.y+EYE_HEIGHT-0.1;
+  var stepUp=(cam.vy<=0&&footY>ny);
+  if(stepUp){
+    var emaAlpha=1-Math.exp(-dt*8.0);
+    cam.pos[1]+=(footY-cam.pos[1])*emaAlpha;
+    cam.vy=0;
+  }else{
+    cam.pos[1]=ny;
+  }
   if(cam.pos[1]<EYE_HEIGHT){cam.pos[1]=EYE_HEIGHT;cam.vy=0;}
 }
 
