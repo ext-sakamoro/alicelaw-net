@@ -346,12 +346,12 @@ var uTimeDilationL=gl.getUniformLocation(prog,'uTimeDilation');
 
 // ── Path Ω: Spacetime Elasticity (RENDER_SCALE=1.0 always) ──
 var ftEMA=16,ftAlpha=0.15;
-var stMaxDist=95.0,stTimeDilation=1.0,stGameTime=-1;
+var stMaxDist=150.0,stTimeDilation=1.0,stGameTime=-1;
 function pathOmegaSpacetime(dtMs){
   ftEMA+=(dtMs-ftEMA)*ftAlpha;
   // Light-speed throttling: shrink max ray distance when GPU heavy
-  if(ftEMA>20)stMaxDist=Math.max(30.0,stMaxDist-2.0);
-  else if(ftEMA<14)stMaxDist=Math.min(95.0,stMaxDist+1.0);
+  if(ftEMA>20)stMaxDist=Math.max(50.0,stMaxDist-2.0);
+  else if(ftEMA<14)stMaxDist=Math.min(150.0,stMaxDist+1.0);
   // Time dilation: heavy frames → slow-motion effect
   if(ftEMA>22)stTimeDilation=Math.max(0.25,stTimeDilation-0.03);
   else if(ftEMA<16)stTimeDilation=Math.min(1.0,stTimeDilation+0.02);
