@@ -1,0 +1,65 @@
+// ESLint 9 flat config for alicelaw-net (静的 HTML + 生 JS + Cloudflare Pages Functions)
+// 適用するには:
+//   1. npm init -y (package.json を作成)
+//   2. npm i -D eslint @eslint/js globals prettier eslint-config-prettier
+//   3. このファイルを eslint.config.js にリネーム
+//   4. npx eslint alice-kernel.js functions/
+//
+// 参考 skill: ~/claude-config/claude-skills/eslint-flat-config/SKILL.md
+
+import js from "@eslint/js";
+import globals from "globals";
+
+export default [
+  js.configs.recommended,
+  {
+    // ブラウザ実行スクリプト (alice-kernel.js, sdf-metaverse.html inline)
+    files: ["alice-kernel.js", "*.js"],
+    ignores: ["functions/**", "node_modules/**", ".wrangler/**"],
+    languageOptions: {
+      ecmaVersion: 2024,
+      sourceType: "script",
+      globals: {
+        ...globals.browser,
+        // ALICE kernel 独自 globals
+        ALICE: "readonly",
+        gl: "writable",
+      },
+    },
+    rules: {
+      // 段階導入: 既存 var 131 件を即修正せず warn に留める
+      "no-var": "warn",
+      "prefer-const": "warn",
+      eqeqeq: ["error", "smart"],
+      "no-eval": "error",
+      "no-implied-eval": "error",
+      "no-unused-vars": ["warn", { argsIgnorePattern: "^_" }],
+      "no-undef": "error",
+      // WebGL/GLSL コードに頻出する float リテラルを許可
+      "no-loss-of-precision": "off",
+    },
+  },
+  {
+    // Cloudflare Pages Functions (Workers runtime)
+    files: ["functions/**/*.js"],
+    languageOptions: {
+      ecmaVersion: 2024,
+      sourceType: "module",
+      globals: {
+        // Cloudflare Workers globals
+        Response: "readonly",
+        Request: "readonly",
+        URL: "readonly",
+        fetch: "readonly",
+        addEventListener: "readonly",
+      },
+    },
+    rules: {
+      "no-var": "error",
+      "prefer-const": "error",
+      eqeqeq: ["error", "always"],
+      "no-eval": "error",
+      "no-console": ["warn", { allow: ["warn", "error"] }],
+    },
+  },
+];

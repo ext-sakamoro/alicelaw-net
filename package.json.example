@@ -1,0 +1,25 @@
+{
+  "name": "alicelaw-net",
+  "version": "0.1.0",
+  "private": true,
+  "description": "alicelaw.net (法人 / 個人サイト, SDF Web + Cloudflare Pages)",
+  "type": "module",
+  "scripts": {
+    "lint": "eslint alice-kernel.js functions/",
+    "lint:fix": "eslint --fix alice-kernel.js functions/",
+    "format": "prettier --write \"**/*.{js,html,json,md}\" --ignore-path .gitignore",
+    "format:check": "prettier --check \"**/*.{js,html,json,md}\" --ignore-path .gitignore",
+    "test": "echo 'no tests yet — link-check candidate' && exit 0",
+    "link-check": "npx --yes linkinator index.html sdf-metaverse.html --recurse --silent",
+    "ci": "npm-run-all -p lint format:check link-check"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.0.0",
+    "eslint": "^9.0.0",
+    "eslint-config-prettier": "^9.1.0",
+    "globals": "^15.0.0",
+    "prettier": "^3.3.0",
+    "npm-run-all": "^4.1.5",
+    "linkinator": "^6.0.0"
+  }
+}
