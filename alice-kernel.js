@@ -312,11 +312,11 @@ var mmAreas=[{x:0,z:0,c:'#8833ff',l:'L'},{x:0,z:-35,c:'#3366ff',l:'S'},{x:35,z:0
 function drawMinimap(){var w=140,h=140,cx=70,cy=70,s=1.5;mmCtx.fillStyle='rgba(0,0,0,0.6)';mmCtx.fillRect(0,0,w,h);mmCtx.strokeStyle='rgba(74,170,255,0.08)';mmCtx.lineWidth=0.5;for(var g=-40;g<=40;g+=10){mmCtx.beginPath();mmCtx.moveTo(cx+g*s,0);mmCtx.lineTo(cx+g*s,h);mmCtx.stroke();mmCtx.beginPath();mmCtx.moveTo(0,cy+g*s);mmCtx.lineTo(w,cy+g*s);mmCtx.stroke();}mmAreas.forEach(function(a){var ax=cx+a.x*s,ay=cy+a.z*s;mmCtx.fillStyle=a.c+'30';mmCtx.beginPath();mmCtx.arc(ax,ay,6,0,PI*2);mmCtx.fill();mmCtx.fillStyle=a.c;mmCtx.beginPath();mmCtx.arc(ax,ay,2.5,0,PI*2);mmCtx.fill();});var px=cx+cam.pos[0]*s,py=cy+cam.pos[2]*s;mmCtx.fillStyle='#fff';mmCtx.beginPath();mmCtx.arc(px,py,3,0,PI*2);mmCtx.fill();mmCtx.strokeStyle='rgba(255,255,255,0.7)';mmCtx.lineWidth=1.5;mmCtx.beginPath();mmCtx.moveTo(px,py);mmCtx.lineTo(px+Math.sin(cam.yaw)*10,py-Math.cos(cam.yaw)*10);mmCtx.stroke();}
 
 // ── WebGL ──────────────────────────────────────────────
-var gl=canvas.getContext('webgl',{alpha:false,antialias:false,powerPreference:'high-performance'});
+var gl=canvas.getContext('webgl2',{alpha:false,antialias:false,powerPreference:'high-performance'});
 function resize(){canvas.width=Math.floor(innerWidth*RENDER_SCALE);canvas.height=Math.floor(innerHeight*RENDER_SCALE);gl.viewport(0,0,canvas.width,canvas.height);}
 resize();window.addEventListener('resize',resize);
 
-var VS='attribute vec2 p;void main(){gl_Position=vec4(p,0,1);}';
+var VS='#version 300 es\nin vec2 p;void main(){gl_Position=vec4(p,0,1);}';
 
 // シェーダー非同期読み込み
 fetch('alice-universe.glsl').then(function(r){return r.text();}).then(function(FS){

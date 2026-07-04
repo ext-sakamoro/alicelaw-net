@@ -1,4 +1,6 @@
+#version 300 es
 precision highp float;
+out vec4 fragColor;
 uniform vec2 uRes;
 uniform float uTime;
 uniform vec3 uCamPos,uCamFwd,uCamRight,uCamUp;
@@ -22,8 +24,13 @@ uniform float uTimeDilation;
 #define SAT(x) clamp(x,0.0,1.0)
 
 // ═══ Noise ═══
-float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
-float hash3(vec3 p){return fract(sin(dot(p,vec3(127.1,311.7,74.7)))*43758.5453);}
+// PCG hash — GLSL ES 3.00 (WebGL2)、Windows ANGLE (WebGL→DX11 translation) で
+// 従来の fract(sin(dot())) hash が fragment shader の transcendental sin() で 5-10x
+// 遅かった問題を解消。Mac Metal / iOS Safari は同等性能。noise パターンは変わるが
+// pseudo-random 性質は保持され、fbm() / vnoise() 経由の下流利用は変わらない。
+uint pcg(uint v){v=v*747796405u+2891336453u;uint w=((v>>((v>>28u)+4u))^v)*277803737u;return (w>>22u)^w;}
+float hash(vec2 p){uvec2 q=floatBitsToUint(p);return float(pcg(q.x^pcg(q.y)))*(1.0/4294967295.0);}
+float hash3(vec3 p){uvec3 q=floatBitsToUint(p);return float(pcg(q.x^pcg(q.y^pcg(q.z))))*(1.0/4294967295.0);}
 float vnoise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.0-2.0*f);return mix(mix(hash(i),hash(i+vec2(1,0)),f.x),mix(hash(i+vec2(0,1)),hash(i+vec2(1,1)),f.x),f.y);}
 float vnoise3(vec3 p){vec3 i=floor(p),f=fract(p);f=f*f*(3.0-2.0*f);float n00=mix(hash3(i),hash3(i+vec3(1,0,0)),f.x);float n10=mix(hash3(i+vec3(0,1,0)),hash3(i+vec3(1,1,0)),f.x);float n01=mix(hash3(i+vec3(0,0,1)),hash3(i+vec3(1,0,1)),f.x);float n11=mix(hash3(i+vec3(0,1,1)),hash3(i+vec3(1,1,1)),f.x);return mix(mix(n00,n10,f.y),mix(n01,n11,f.y),f.z);}
 float fbm(vec2 p){float v=0.0,a=0.5;mat2 r=mat2(0.8,0.6,-0.6,0.8);for(int i=0;i<3;i++){v+=a*vnoise(p);p=r*p*2.1;a*=0.48;}return v;}
@@ -1026,5 +1033,5 @@ void main(){
 
   // ═══ Gamma ═══
   col=pow(max(col,vec3(0)),vec3(1.0/2.2));
-  gl_FragColor=vec4(col,1);
+  fragColor=vec4(col,1);
 }
